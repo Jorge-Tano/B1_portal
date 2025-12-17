@@ -1,6 +1,8 @@
+// app/layout.tsx
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import Providers from "./providers"; // ✅ Importar el Client Component
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,10 +28,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        {/* ✅ Usar Providers en lugar de SessionProvider directo */}
+        <Providers>
+          {children}
+        </Providers>
       </body>
     </html>
   );

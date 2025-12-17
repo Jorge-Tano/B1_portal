@@ -1,13 +1,41 @@
 'use client'
 
-import { SessionProvider } from "next-auth/react"   
-
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { useState } from 'react';
 
-
-export default function LoginForm() {
+export default function LoginPage() {  // ✅ Cambiado nombre a LoginPage
+  const router = useRouter();
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const result = await signIn('credentials', {
+        username: username.trim(),
+        password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setError('Usuario o contraseña incorrectos');
+      } else {
+        router.push('/dashboard');
+      }
+    } catch (err) {
+      setError('Error de conexión con el servidor');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="flex h-screen">
@@ -28,16 +56,20 @@ export default function LoginForm() {
             </div>
 
             <div className="text-gray-900">
-              <form className="flex flex-col space-y-7">
+              <form onSubmit={handleSubmit} className="flex flex-col space-y-7">
                 <div>
-                  <label htmlFor="email" className="block text-sm font-semibold text-gray-900 mb-3">
-                    Correo Electrónico
+                  <label htmlFor="username" className="block text-sm font-semibold text-gray-900 mb-3">
+                    Usuario
                   </label>
                   <input
-                    type="email"
-                    id="email"
+                    type="text"
+                    id="username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
                     className="w-full p-4 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-[#6A3EF0] focus:bg-white text-gray-900 placeholder-gray-500 transition-all duration-300"
-                    placeholder="correo@ejemplo.com"
+                    placeholder="usuario"
+                    required
+                    disabled={loading}
                   />
                 </div>
 
@@ -53,21 +85,38 @@ export default function LoginForm() {
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
                       className="w-full px-4 py-4 pr-24 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-[#6A3EF0] focus:bg-white text-gray-900 placeholder-gray-500 transition-all duration-300"
+                      required
+                      disabled={loading}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-600 hover:text-gray-900"
+                    >
+                      {showPassword ? 'Ocultar' : 'Mostrar'}
+                    </button>
                   </div>
                 </div>
+
+                {error && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-red-700 text-sm">{error}</p>
+                  </div>
+                )}
+
                 <input
                   type="submit"
-                  value="Iniciar Sesión"
-                  className="w-full bg-[#6A3EF0] text-white py-4 rounded-xl font-bold hover:bg-[#1BB5B2] transition-all duration-500 shadow-lg hover:shadow-2xl hover:shadow-[#6A3EF0]/30 transform hover:-translate-y-1 cursor-pointer"
+                  value={loading ? "Autenticando..." : "Iniciar Sesión"}
+                  disabled={loading}
+                  className="w-full bg-[#6A3EF0] text-white py-4 rounded-xl font-bold hover:bg-[#1BB5B2] transition-all duration-500 shadow-lg hover:shadow-2xl hover:shadow-[#6A3EF0]/30 transform hover:-translate-y-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </form>
+
+              
             </div>
           </div>
         </div>
       </div>
     </div>
   );
-};
-
-
+}

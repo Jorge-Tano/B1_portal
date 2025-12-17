@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "ldapjs": "^3.0.7",
     "next": "16.0.10",
     "next-auth": "^4.24.13",
     "react": "19.2.1",
@@ -16,6 +17,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/ldapjs": "^3.0.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
