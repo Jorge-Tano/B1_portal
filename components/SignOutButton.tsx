@@ -1,10 +1,9 @@
-// components/SignOutButton.tsx
 'use client'
 
 import { signOut } from "next-auth/react"
 import { useRouter } from "next/navigation"
 
-export default function SignOutButton() {
+export default function SignOut() {
   const router = useRouter()
   
   const handleSignOut = async () => {

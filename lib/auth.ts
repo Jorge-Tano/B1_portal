@@ -1,60 +1,77 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { authenticateWithServiceAccount } from "./ldap-direct-bind";
+import { LdapClient } from "@/lib/ldap-client";
 
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
       name: "Active Directory",
       credentials: {
-        username: { label: "Usuario", type: "text", placeholder: "jperez" },
+        username: { label: "Usuario", type: "text" },
         password: { label: "Contraseña", type: "password" }
       },
       async authorize(credentials) {
+        console.log('=== AUTENTICACIÓN AD ===');
+        console.log('Usuario:', credentials?.username);
+        
+        if (!credentials?.username || !credentials?.password) {
+          throw new Error("Por favor ingresa usuario y contraseña");
+        }
+
+        const ldapClient = new LdapClient();
+        const username = credentials.username.trim().toLowerCase();
+        
         try {
-          if (!credentials?.username || !credentials?.password) {
-            throw new Error("Por favor ingrese usuario y contraseña");
+          // 1. Autenticar usuario
+          console.log('1. Autenticando...');
+          const authResult = await ldapClient.authenticateUser(
+            username,
+            credentials.password
+          );
+
+          if (!authResult.authenticated) {
+            throw new Error(authResult.message || 'Usuario o contraseña incorrectos');
           }
 
-          const username = credentials.username.trim().toLowerCase();
+          console.log('✅ Autenticación exitosa');
+
+          // 2. INTENTAR LEER DATOS (con múltiples métodos)
+          console.log('2. Intentando leer datos del usuario...');
+          const userDataResult = await ldapClient.getUserDetails(username);
           
-          // Usar la NUEVA función con cuenta de servicio
-          const user = await authenticateWithServiceAccount(username, credentials.password);
+          console.log(`   Método usado: ${userDataResult.methodUsed}`);
           
-          if (!user) {
-            throw new Error("Usuario o contraseña incorrectos");
+          if (userDataResult.error) {
+            console.log(`   ⚠️ Advertencia: ${userDataResult.error}`);
           }
-          
-          // Devolver datos COMPLETOS del AD
-          return {
-            id: user.sAMAccountName,
-            name: user.displayName,
-            email: user.mail,
+
+          // 3. Crear objeto de usuario con METADATOS sobre la fuente de datos
+          const authUser = {
+            id: userDataResult.data.sAMAccountName,
+            name: userDataResult.data.displayName,
+            email: userDataResult.data.mail,
             adUser: {
-              ...user,
-              // Para fácil acceso en el dashboard
-              organization: {
-                department: user.department,
-                title: user.title,
-                company: user.company
+              ...userDataResult.data,
+              _metadata: {
+                source: userDataResult.methodUsed,
+                hasFullData: userDataResult.methodUsed.includes('completo'),
+                readSuccess: userDataResult.success,
+                timestamp: new Date().toISOString()
               }
             }
           };
-          
+
+          console.log(`✅ Usuario creado: ${authUser.id} (${userDataResult.methodUsed})`);
+          return authUser;
+
         } catch (error: any) {
-          console.error("[NextAuth] Error en authorize:", error);
-          
-          if (error.message.includes("conectar")) {
-            throw new Error("No se puede conectar al servidor AD. Verifica la configuración.");
-          }
-          
+          console.error('❌ Error en autorización:', error.message);
           throw error;
         }
       }
     })
   ],
   
-  // ... resto de la configuración igual
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
@@ -71,7 +88,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id as string;
         session.user.name = token.name as string;
         session.user.email = token.email as string;
-        (session.user as any).adUser = token.adUser;
+        session.user.adUser = token.adUser as any;
       }
       return session;
     }
@@ -79,8 +96,11 @@ export const authOptions: NextAuthOptions = {
   
   pages: {
     signIn: "/auth/login",
-    error: "/auth/error"
   },
   
-  debug: process.env.NODE_ENV === "development"
+  session: {
+    strategy: "jwt",
+  },
+  
+  secret: process.env.NEXTAUTH_SECRET,
 };

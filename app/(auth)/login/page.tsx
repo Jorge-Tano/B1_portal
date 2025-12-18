@@ -1,10 +1,12 @@
+// app/auth/login/page.tsx
 'use client'
 
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState } from 'react';
+import Image from 'next/image';
 
-export default function LoginPage() {  // ✅ Cambiado nombre a LoginPage
+export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -16,7 +18,7 @@ export default function LoginPage() {  // ✅ Cambiado nombre a LoginPage
     e.preventDefault();
     setError('');
     setLoading(true);
-
+    
     try {
       const result = await signIn('credentials', {
         username: username.trim(),
@@ -28,6 +30,7 @@ export default function LoginPage() {  // ✅ Cambiado nombre a LoginPage
         setError('Usuario o contraseña incorrectos');
       } else {
         router.push('/dashboard');
+        router.refresh();
       }
     } catch (err) {
       setError('Error de conexión con el servidor');
@@ -41,7 +44,7 @@ export default function LoginPage() {  // ✅ Cambiado nombre a LoginPage
     <div className="flex h-screen">
       <div className="flex bg-gradient-to-r from-emerald-500 to-white w-[50%]">
         <div className="flex flex-col justify-center p-[17%] text-white space-y-6">
-          <img src="/img.png" alt="" />
+          <img src="/img.png" alt="Logo B1 Portal" className="w-full" />
         </div>
       </div>
       <div className="w-[50%]">
@@ -91,7 +94,7 @@ export default function LoginPage() {  // ✅ Cambiado nombre a LoginPage
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-600 hover:text-gray-900"
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-600 hover:text-gray-900 px-3 py-1"
                     >
                       {showPassword ? 'Ocultar' : 'Mostrar'}
                     </button>
@@ -110,9 +113,7 @@ export default function LoginPage() {  // ✅ Cambiado nombre a LoginPage
                   disabled={loading}
                   className="w-full bg-[#6A3EF0] text-white py-4 rounded-xl font-bold hover:bg-[#1BB5B2] transition-all duration-500 shadow-lg hover:shadow-2xl hover:shadow-[#6A3EF0]/30 transform hover:-translate-y-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 />
-              </form>
-
-              
+              </form>              
             </div>
           </div>
         </div>
