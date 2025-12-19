@@ -1,6 +1,10 @@
+// lib/auth.ts
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { LdapClient } from "@/lib/ldap-client";
+
+// Para debug, verifica que la importación funciona
+console.log('✅ LdapClient importado:', LdapClient ? 'SÍ' : 'NO');
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -18,11 +22,11 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Por favor ingresa usuario y contraseña");
         }
 
-        const ldapClient = new LdapClient();
-        const username = credentials.username.trim().toLowerCase();
-        
         try {
-          // 1. Autenticar usuario
+          const ldapClient = new LdapClient();
+          const username = credentials.username.trim().toLowerCase();
+          
+          // 1. Autenticar usuario (SIMPLIFICADO para testing)
           console.log('1. Autenticando...');
           const authResult = await ldapClient.authenticateUser(
             username,
@@ -30,43 +34,39 @@ export const authOptions: NextAuthOptions = {
           );
 
           if (!authResult.authenticated) {
-            throw new Error(authResult.message || 'Usuario o contraseña incorrectos');
+            throw new Error(authResult.message || 'Autenticación fallida');
           }
 
           console.log('✅ Autenticación exitosa');
 
-          // 2. INTENTAR LEER DATOS (con múltiples métodos)
-          console.log('2. Intentando leer datos del usuario...');
+          // 2. Obtener datos del usuario
+          console.log('2. Obteniendo datos...');
           const userDataResult = await ldapClient.getUserDetails(username);
           
-          console.log(`   Método usado: ${userDataResult.methodUsed}`);
+          console.log(`   Método: ${userDataResult.methodUsed}`);
+          console.log(`   Éxito: ${userDataResult.success}`);
           
           if (userDataResult.error) {
             console.log(`   ⚠️ Advertencia: ${userDataResult.error}`);
           }
 
-          // 3. Crear objeto de usuario con METADATOS sobre la fuente de datos
+          // 3. Crear objeto de usuario
           const authUser = {
             id: userDataResult.data.sAMAccountName,
             name: userDataResult.data.displayName,
             email: userDataResult.data.mail,
             adUser: {
               ...userDataResult.data,
-              _metadata: {
-                source: userDataResult.methodUsed,
-                hasFullData: userDataResult.methodUsed.includes('completo'),
-                readSuccess: userDataResult.success,
-                timestamp: new Date().toISOString()
-              }
+              _metadata: userDataResult.data._metadata
             }
           };
 
-          console.log(`✅ Usuario creado: ${authUser.id} (${userDataResult.methodUsed})`);
+          console.log(`✅ Usuario creado: ${authUser.id}`);
           return authUser;
 
         } catch (error: any) {
           console.error('❌ Error en autorización:', error.message);
-          throw error;
+          throw new Error(`Error de autenticación: ${error.message}`);
         }
       }
     })
@@ -103,4 +103,7 @@ export const authOptions: NextAuthOptions = {
   },
   
   secret: process.env.NEXTAUTH_SECRET,
+  
+  // Para debug
+  debug: process.env.NODE_ENV === 'development',
 };

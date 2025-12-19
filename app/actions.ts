@@ -1,8 +1,8 @@
-// app/actions.ts
 'use server'
 
-import { signOut } from "@/components/SignOutButton"
+// Importa la función del componente
+import { signOutFunction } from "@/components/SignOutButton"
 
 export async function signOutAction() {
-  await signOut({ redirectTo: "/login" })
+  await signOutFunction("/login")
 }

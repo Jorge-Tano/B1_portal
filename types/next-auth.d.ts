@@ -1,4 +1,6 @@
-import NextAuth, { DefaultSession } from "next-auth";
+// types/next-auth.d.ts
+import { DefaultSession } from "next-auth";
+import { EssentialADUser } from "@/lib/ldap-client";
 
 declare module "next-auth" {
   interface Session {
@@ -7,7 +9,7 @@ declare module "next-auth" {
       name?: string | null;
       email?: string | null;
       image?: string | null;
-      adUser?: ADUser;
+      adUser?: EssentialADUser; // Opcional
     } & DefaultSession["user"];
   }
 
@@ -16,43 +18,13 @@ declare module "next-auth" {
     name?: string | null;
     email?: string | null;
     image?: string | null;
-    adUser?: ADUser;
+    adUser?: EssentialADUser; // Opcional
   }
-}
-
-export interface ADUser {
-  // Datos básicos del usuario
-  dn?: string;
-  sAMAccountName: string;
-  displayName: string;
-  mail: string;
-  department?: string;
-  title?: string;
-  company?: string;
-  physicalDeliveryOfficeName?: string;
-  telephoneNumber?: string;
-  mobile?: string;
-  memberOf?: string[];
-  userAccountControl?: number;
-  isAccountEnabled?: boolean;
-  groupAnalysis?: {
-    isAdmin: boolean;
-    totalGroups: number;
-  };
-  
-  // Metadatos sobre la fuente de los datos (NUEVO)
-  _metadata?: {
-    source: string;
-    hasFullData: boolean;
-    readSuccess: boolean;
-    timestamp?: string;
-    methodUsed?: string;
-  };
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
     id: string;
-    adUser?: ADUser;
+    adUser?: EssentialADUser; // Opcional
   }
 }

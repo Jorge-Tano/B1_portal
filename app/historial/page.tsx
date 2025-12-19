@@ -1,12 +1,12 @@
 import React from 'react';
-import { 
-  Search, 
-  Filter, 
-  Calendar, 
-  Download, 
+import {
+  Search,
+  Filter,
+  Calendar,
+  Download,
   DollarSign,
-  CheckCircle, 
-  Clock, 
+  CheckCircle,
+  Clock,
   AlertCircle,
   TrendingUp,
   TrendingDown,
@@ -39,23 +39,6 @@ const HistorialAnticipos = () => {
               </div>
             </div>
           </div>
-          
-          <div className="bg-white rounded-2xl border border-gray-200 p-3 shadow-sm w-full md:w-auto">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-r from-blue-400 to-blue-500 flex items-center justify-center text-white text-xl font-bold">
-                MG
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-900 text-lg">María González</h3>
-                <p className="text-gray-600">Directora de Innovación</p>
-                <div className="flex items-center gap-2 mt-2">
-                  <div className="text-sm px-3 py-1 bg-blue-100 text-blue-700 rounded-full">
-                    Límite: $15,000
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-200 p-4 md:p-6 shadow-sm mb-8">
@@ -71,7 +54,7 @@ const HistorialAnticipos = () => {
                 />
               </div>
             </div>
-            
+
             <div className="flex items-center gap-3 flex-wrap">
               <button className="flex items-center gap-2 px-5 py-3 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors">
                 <Calendar className="h-4 w-4" />
@@ -183,7 +166,7 @@ const HistorialAnticipos = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="col-span-3 lg:col-span-2">
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-100 text-green-800 w-fit">
                   <CheckCircle className="h-4 w-4" />
@@ -191,19 +174,19 @@ const HistorialAnticipos = () => {
                 </div>
                 <div className="text-xs text-gray-500 mt-1">Completado</div>
               </div>
-              
+
               <div className="col-span-3 lg:col-span-2">
                 <div className="text-gray-900">
                   <div className="font-medium">15 Mar, 2024</div>
                   <div className="text-sm text-gray-500">Solicitado: 10 Mar</div>
                 </div>
               </div>
-              
+
               <div className="col-span-2">
                 <div className="font-bold text-lg text-gray-900">$3,500</div>
                 <div className="text-sm text-gray-500">Viaje: Silicon Valley</div>
               </div>
-              
+
               <div className="col-span-1">
                 <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                   <Eye className="h-5 w-5 text-gray-400" />
@@ -212,7 +195,7 @@ const HistorialAnticipos = () => {
             </div>
           </div>
 
-          
+
 
           <div className="px-6 py-5 hover:bg-gray-50 transition-colors">
             <div className="grid grid-cols-12 gap-4 items-center">
@@ -232,7 +215,7 @@ const HistorialAnticipos = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="col-span-3 lg:col-span-2">
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-100 text-green-800 w-fit">
                   <CheckCircle className="h-4 w-4" />
@@ -240,19 +223,19 @@ const HistorialAnticipos = () => {
                 </div>
                 <div className="text-xs text-gray-500 mt-1">Por pagar</div>
               </div>
-              
+
               <div className="col-span-3 lg:col-span-2">
                 <div className="text-gray-900">
                   <div className="font-medium">22 Mar, 2024</div>
                   <div className="text-sm text-gray-500">Solicitado: 18 Mar</div>
                 </div>
               </div>
-              
+
               <div className="col-span-2">
                 <div className="font-bold text-lg text-gray-900">$850</div>
                 <div className="text-sm text-gray-500">Consulta especializada</div>
               </div>
-              
+
               <div className="col-span-1">
                 <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                   <Eye className="h-5 w-5 text-gray-400" />
@@ -279,7 +262,7 @@ const HistorialAnticipos = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="col-span-3 lg:col-span-2">
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-100 text-blue-800 w-fit">
                   <Clock className="h-4 w-4" />
@@ -287,19 +270,19 @@ const HistorialAnticipos = () => {
                 </div>
                 <div className="text-xs text-gray-500 mt-1">En proceso</div>
               </div>
-              
+
               <div className="col-span-3 lg:col-span-2">
                 <div className="text-gray-900">
                   <div className="font-medium">10 Mar, 2024</div>
                   <div className="text-sm text-gray-500">Solicitado: 5 Mar</div>
                 </div>
               </div>
-              
+
               <div className="col-span-2">
                 <div className="font-bold text-lg text-gray-900">$2,000</div>
                 <div className="text-sm text-gray-500">Conferencia anual</div>
               </div>
-              
+
               <div className="col-span-1">
                 <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                   <Eye className="h-5 w-5 text-gray-400" />
@@ -314,7 +297,7 @@ const HistorialAnticipos = () => {
         <div className="text-gray-600">
           Mostrando <span className="font-semibold text-gray-900">3</span> de <span className="font-semibold text-gray-900">14</span> anticipos
         </div>
-        
+
         <div className="flex items-center gap-2">
           <button className="px-4 py-2.5 border border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors">
             Anterior
@@ -342,7 +325,7 @@ const HistorialAnticipos = () => {
           <div>
             <h4 className="font-bold text-gray-900 text-lg mb-2">Información importante</h4>
             <p className="text-gray-700 mb-3">
-              Este es tu historial personal de anticipos. Puedes ver el estado de cada solicitud, 
+              Este es tu historial personal de anticipos. Puedes ver el estado de cada solicitud,
               descargar comprobantes y hacer seguimiento a los pagos pendientes.
             </p>
             <div className="flex items-center gap-6 text-sm">
