@@ -1,6 +1,6 @@
 // types/next-auth.d.ts
-import { DefaultSession } from "next-auth";
-import { EssentialADUser } from "@/lib/ldap-client";
+import { DefaultSession, DefaultUser } from "next-auth";
+import { ADUserData } from "@/lib/ldap-client";
 
 declare module "next-auth" {
   interface Session {
@@ -9,7 +9,19 @@ declare module "next-auth" {
       name?: string | null;
       email?: string | null;
       image?: string | null;
-      adUser?: EssentialADUser; // Opcional
+      adUser?: ADUserData;
+      ou?: string;
+      allOUs?: string[];
+      employeeID?: string;
+      // NUEVO: Estructura de OU
+      ouStructure?: {
+        colombia?: string;
+        ti?: string;
+        platform?: string;
+        fullPath?: string[];
+        isInTI?: boolean;
+        isInColombia?: boolean;
+      };
     } & DefaultSession["user"];
   }
 
@@ -18,13 +30,37 @@ declare module "next-auth" {
     name?: string | null;
     email?: string | null;
     image?: string | null;
-    adUser?: EssentialADUser; // Opcional
+    adUser?: ADUserData;
+    ou?: string;
+    allOUs?: string[];
+    employeeID?: string;
+    // NUEVO: Estructura de OU
+    ouStructure?: {
+      colombia?: string;
+      ti?: string;
+      platform?: string;
+      fullPath?: string[];
+      isInTI?: boolean;
+      isInColombia?: boolean;
+    };
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
     id: string;
-    adUser?: EssentialADUser; // Opcional
+    adUser?: ADUserData;
+    ou?: string;
+    allOUs?: string[];
+    employeeID?: string;
+    // NUEVO: Estructura de OU
+    ouStructure?: {
+      colombia?: string;
+      ti?: string;
+      platform?: string;
+      fullPath?: string[];
+      isInTI?: boolean;
+      isInColombia?: boolean;
+    };
   }
 }

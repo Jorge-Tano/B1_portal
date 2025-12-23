@@ -4,631 +4,535 @@ import { useState, useRef, useEffect } from 'react'
 import { signOut, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 
-interface ADUserData {
-  dn?: string;
-  sAMAccountName?: string;
-  displayName?: string;
-  mail?: string;
-  givenName?: string;
-  sn?: string;
-  cn?: string;
-  title?: string;
-  department?: string;
-  company?: string;
-  physicalDeliveryOfficeName?: string;
-  telephoneNumber?: string;
-  mobile?: string;
-  memberOf?: string[];
-  userAccountControl?: number;
-  isAccountEnabled?: boolean;
-  groupAnalysis?: {
-    isAdmin: boolean;
-    totalGroups: number;
-    adminGroups?: string[];
-  };
-  _metadata?: {
-    source: string;
-    hasFullData: boolean;
-    readSuccess: boolean;
-    timestamp: string;
-    methodUsed: string;
-  };
-}
-
 export function UserAvatarMenu() {
   const [isOpen, setIsOpen] = useState(false)
-  const [showADModal, setShowADModal] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
 
-  // Obtener datos del usuario desde la sesión
-  const adUser = session?.user?.adUser as ADUserData | undefined
-  const user = session?.user
-  
-  // Obtener iniciales para el avatar
-  const getInitials = () => {
-    if (!adUser) return 'U'
-    
-    if (adUser.displayName) {
-      const names = adUser.displayName.split(' ')
+  if (status === "loading") {
+    return (
+      <div className="flex items-center gap-3 p-1.5">
+        <div className="flex justify-center items-center w-10 h-10 rounded-full bg-gray-200 animate-pulse">
+          <div className="w-6 h-6 bg-gray-300 rounded-full"></div>
+        </div>
+        <div className="hidden md:block text-left">
+          <div className="h-4 w-24 bg-gray-200 rounded animate-pulse mb-1"></div>
+          <div className="h-3 w-16 bg-gray-200 rounded animate-pulse"></div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!session) {
+    return (
+      <a
+        href="/login"
+        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+      >
+        Iniciar sesión
+      </a>
+    )
+  }
+
+  const getEmployeeId = (): string | null => {
+    const adUser = session.user?.adUser;
+    if (adUser?.employeeID && adUser.employeeID.trim() !== '') {
+      return adUser.employeeID.trim();
+    }
+
+    if (adUser?.employeeNumber && adUser.employeeNumber.trim() !== '') {
+      return adUser.employeeNumber.trim();
+    }
+
+    return null;
+  };
+
+  const getInitials = (): string => {
+    const adUser = session.user?.adUser;
+
+    if (adUser?.displayName) {
+      const names = adUser.displayName.split(' ');
       if (names.length >= 2) {
-        return `${names[0].charAt(0)}${names[1].charAt(0)}`.toUpperCase()
+        return `${names[0].charAt(0)}${names[1].charAt(0)}`.toUpperCase();
       }
-      return names[0].charAt(0).toUpperCase()
+      return names[0].charAt(0).toUpperCase();
     }
-    
-    if (adUser.sAMAccountName) {
-      return adUser.sAMAccountName.charAt(0).toUpperCase()
-    }
-    
-    return 'U'
-  }
 
-  // Obtener nombre para mostrar
-  const getDisplayName = () => {
-    if (adUser?.displayName) return adUser.displayName
-    if (user?.name) return user.name
-    return 'Usuario'
-  }
-
-  // Obtener departamento/cargo
-  const getDepartment = () => {
-    if (adUser?.sAMAccountName) return adUser.sAMAccountName
-    if (adUser?.title) return adUser.title
-    return 'Usuario'
-  }
-
-  // Obtener email
-  const getEmail = () => {
-    if (adUser?.mail) return adUser.mail
-    if (user?.email) return user.email
-    return 'usuario@2call.cl'
-  }
-
-  // Función segura para convertir cualquier valor a string
-  const safeStringify = (value: any): string => {
-    if (value === undefined || value === null) return '<vacío>'
-    if (typeof value === 'string') return value
-    if (typeof value === 'number' || typeof value === 'boolean') return String(value)
-    if (Array.isArray(value)) return JSON.stringify(value)
-    if (typeof value === 'object') {
-      try {
-        return JSON.stringify(value, null, 2)
-      } catch {
-        return '[Objeto]'
+    if (session.user?.name) {
+      const names = session.user.name.split(' ');
+      if (names.length >= 2) {
+        return `${names[0].charAt(0)}${names[1].charAt(0)}`.toUpperCase();
       }
+      return names[0].charAt(0).toUpperCase();
     }
-    return String(value)
-  }
 
-  // Función segura para determinar si un valor está "lleno"
-  const isFieldFilled = (value: any): boolean => {
-    if (value === undefined || value === null) return false
-    if (typeof value === 'string') return value.trim() !== ''
-    if (Array.isArray(value)) return value.length > 0
-    if (typeof value === 'object') {
-      // Para objetos, consideramos que están llenos si tienen al menos una propiedad
-      return Object.keys(value).length > 0
+    if (session.user?.email) {
+      return session.user.email.charAt(0).toUpperCase();
     }
-    return true // Para números, booleanos, etc.
-  }
 
-  // Obtener estado del campo
-  const getFieldStatus = (value: any): { text: string; className: string } => {
-    if (value === undefined || value === null) {
-      return { text: 'No definido', className: 'text-red-500' }
-    }
-    
-    if (Array.isArray(value)) {
-      return { 
-        text: `${value.length} elemento${value.length !== 1 ? 's' : ''}`, 
-        className: value.length > 0 ? 'text-green-500' : 'text-yellow-500' 
-      }
-    }
-    
-    if (typeof value === 'string') {
-      return { 
-        text: value.trim() === '' ? 'Vacío' : 'Texto', 
-        className: value.trim() === '' ? 'text-yellow-500' : 'text-green-500' 
-      }
-    }
-    
-    if (typeof value === 'number') {
-      return { text: `Número`, className: 'text-green-500' }
-    }
-    
-    if (typeof value === 'boolean') {
-      return { 
-        text: value ? 'Verdadero' : 'Falso', 
-        className: 'text-blue-500' 
-      }
-    }
-    
-    if (typeof value === 'object') {
-      return { 
-        text: 'Objeto', 
-        className: Object.keys(value).length > 0 ? 'text-green-500' : 'text-yellow-500' 
-      }
-    }
-    
-    return { text: 'Desconocido', className: 'text-gray-500' }
-  }
+    return 'U';
+  };
 
-  // Contar campos llenos
-  const countFields = (data: ADUserData | undefined) => {
-    if (!data) return { total: 0, filled: 0 }
-    
-    const fields = Object.keys(data)
-    let filled = 0
-    
-    fields.forEach(field => {
-      const value = data[field as keyof ADUserData]
-      if (isFieldFilled(value)) {
-        filled++
-      }
-    })
-    
-    return { total: fields.length, filled }
-  }
+  const getDisplayName = (): string => {
+    const adUser = session.user?.adUser;
 
-  const stats = countFields(adUser)
+    if (adUser?.displayName) {
+      return adUser.displayName;
+    }
+
+    if (session.user?.name) {
+      return session.user.name;
+    }
+
+    if (adUser?.sAMAccountName) {
+      return adUser.sAMAccountName;
+    }
+
+    return 'Usuario';
+  };
+
+  const getUserInfo = (): string => {
+    const employeeId = getEmployeeId();
+
+    if (employeeId) {
+      return `ID: ${employeeId}`;
+    }
+
+    const adUser = session.user?.adUser;
+    if (adUser?.sAMAccountName) {
+      return adUser.sAMAccountName;
+    }
+
+    if (adUser?.title) {
+      return adUser.title;
+    }
+
+    return 'Usuario';
+  };
+
+  const getEmail = (): string => {
+    const adUser = session.user?.adUser;
+
+    if (adUser?.mail) {
+      return adUser.mail;
+    }
+
+    if (session.user?.email) {
+      return session.user.email;
+    }
+
+    return 'usuario@2cal1.c1';
+  };
+
+  const getDepartment = (): string | null => {
+    const adUser = session.user?.adUser;
+    return adUser?.department || null;
+  };
+
+  const getTitle = (): string | null => {
+    const adUser = session.user?.adUser;
+    return adUser?.title || null;
+  };
+
+  // NUEVO: Obtener estructura de OU
+  const getOUStructure = () => {
+    const adUser = session.user?.adUser;
+    
+    if (adUser?.ouStructure) {
+      return adUser.ouStructure;
+    }
+    
+    // Si no hay estructura específica, crear una básica
+    const userAllOUs = session.user?.allOUs || [];
+    
+    return {
+      colombia: userAllOUs.find(ou => ou.toLowerCase() === 'colombia'),
+      ti: userAllOUs.find(ou => ou.toLowerCase() === 'ti'),
+      platform: userAllOUs.find(ou => ou.toLowerCase() === 'plataforma'),
+      fullPath: userAllOUs,
+      isInTI: userAllOUs.some(ou => ou.toLowerCase() === 'ti'),
+      isInColombia: userAllOUs.some(ou => ou.toLowerCase() === 'colombia'),
+      isInPlatform: userAllOUs.some(ou => ou.toLowerCase() === 'plataforma')
+    };
+  };
+
+  // NUEVO: Obtener display de OU
+  const getOUDisplay = (): string => {
+    const ouStructure = getOUStructure();
+    
+    if (ouStructure.fullPath && ouStructure.fullPath.length > 0) {
+      return ouStructure.fullPath.join(' → ');
+    }
+    
+    return session.user?.ou || 'Sin OU';
+  };
+
+  // NUEVO: Obtener badge de ubicación
+  const getLocationBadge = () => {
+    const ouStructure = getOUStructure();
+    
+    if (ouStructure.isInColombia) {
+      if (ouStructure.isInTI) {
+        return {
+          text: 'TI - Colombia',
+          color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+          icon: '🇨🇴',
+          badgeColor: 'bg-blue-500'
+        };
+      }
+      return {
+        text: 'Colombia',
+        color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+        icon: '🇨🇴',
+        badgeColor: 'bg-yellow-500'
+      };
+    }
+    
+    if (ouStructure.isInPlatform) {
+      return {
+        text: 'Plataforma',
+        color: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+        icon: '🏢',
+        badgeColor: 'bg-purple-500'
+      };
+    }
+    
+    return null;
+  };
+
+  // NUEVO: Obtener OU primaria
+  const getPrimaryOU = (): string | null => {
+    const ouStructure = getOUStructure();
+    
+    if (ouStructure.colombia) return ouStructure.colombia;
+    if (ouStructure.ti) return ouStructure.ti;
+    if (ouStructure.platform) return ouStructure.platform;
+    
+    const fullPath = ouStructure.fullPath;
+    if (fullPath.length > 0) return fullPath[0];
+    
+    return session.user?.ou || null;
+  };
+
+  const handleSignOut = async () => {
+    await signOut({
+      redirect: false,
+      callbackUrl: "/login"
+    });
+    router.push("/login");
+    setIsOpen(false);
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
+        setIsOpen(false);
       }
     }
 
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-  const handleSignOut = async () => {
-    await signOut({ redirect: false })
-    router.push("/login")
-    setIsOpen(false)
-  }
+  const employeeId = getEmployeeId();
+  const department = getDepartment();
+  const title = getTitle();
+  const ouStructure = getOUStructure();
+  const locationBadge = getLocationBadge();
+  const ouDisplay = getOUDisplay();
+  const primaryOU = getPrimaryOU();
 
-  // Renderizar campos específicos de forma segura
-  const renderBasicInfo = () => {
-    if (!adUser) return null
-    
-    const basicFields = [
-      { key: 'displayName', label: 'Nombre para mostrar', value: adUser.displayName },
-      { key: 'sAMAccountName', label: 'Nombre de usuario', value: adUser.sAMAccountName },
-      { key: 'mail', label: 'Email', value: adUser.mail },
-      { key: 'cn', label: 'Nombre común (CN)', value: adUser.cn },
-      { key: 'givenName', label: 'Nombre', value: adUser.givenName },
-      { key: 'sn', label: 'Apellido', value: adUser.sn },
-      { key: 'dn', label: 'Distinguished Name', value: adUser.dn },
-    ]
-    
-    return basicFields.map(({ key, label, value }) => {
-      const status = getFieldStatus(value)
-      const displayValue = safeStringify(value)
-      
-      return (
-        <div key={key} className="border dark:border-gray-700 rounded p-3">
-          <div className="flex justify-between items-start">
-            <div>
-              <span className="font-medium text-gray-700 dark:text-gray-300">{label}</span>
-              <div className="text-sm mt-1">
-                <code className={`px-2 py-1 rounded ${status.className} break-all`}>
-                  {displayValue}
-                </code>
-              </div>
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-3 p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        aria-label="Menú de usuario"
+        aria-expanded={isOpen}
+      >
+        <div className="relative">
+          <div className="flex justify-center items-center w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 shadow-sm">
+            <span className="text-white font-semibold text-base">{getInitials()}</span>
+          </div>
+
+          {employeeId && (
+            <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+              <span className="text-white text-xs font-bold">✓</span>
             </div>
-            <span className={`text-xs px-2 py-1 rounded-full ${status.className} bg-opacity-20 ${status.className.replace('text-', 'bg-')}`}>
-              {status.text}
-            </span>
-          </div>
-        </div>
-      )
-    })
-  }
+          )}
 
-  const renderOrganizationalInfo = () => {
-    if (!adUser) return null
-    
-    const orgFields = [
-      { key: 'title', label: 'Cargo', value: adUser.title },
-      { key: 'department', label: 'Departamento', value: adUser.department },
-      { key: 'company', label: 'Empresa', value: adUser.company },
-      { key: 'physicalDeliveryOfficeName', label: 'Oficina', value: adUser.physicalDeliveryOfficeName },
-    ]
-    
-    return orgFields.map(({ key, label, value }) => {
-      const status = getFieldStatus(value)
-      const displayValue = safeStringify(value)
-      
-      return (
-        <div key={key} className="border dark:border-gray-700 rounded p-3">
-          <div className="flex justify-between">
-            <span className="font-medium text-gray-700 dark:text-gray-300">{label}</span>
-            <span className={`text-xs px-2 py-1 rounded-full ${status.className} bg-opacity-20 ${status.className.replace('text-', 'bg-')}`}>
-              {status.text}
-            </span>
-          </div>
-          <div className="mt-2">
-            <code className="text-sm break-all">{displayValue}</code>
-          </div>
-        </div>
-      )
-    })
-  }
-
-  const renderContactInfo = () => {
-    if (!adUser) return null
-    
-    const contactFields = [
-      { key: 'telephoneNumber', label: 'Teléfono', value: adUser.telephoneNumber },
-      { key: 'mobile', label: 'Móvil', value: adUser.mobile },
-    ]
-    
-    return contactFields.map(({ key, label, value }) => {
-      const status = getFieldStatus(value)
-      const displayValue = safeStringify(value)
-      
-      return (
-        <div key={key} className="border dark:border-gray-700 rounded p-3">
-          <div className="flex justify-between">
-            <span className="font-medium text-gray-700 dark:text-gray-300">{label}</span>
-            <span className={`text-xs px-2 py-1 rounded-full ${status.className} bg-opacity-20 ${status.className.replace('text-', 'bg-')}`}>
-              {status.text}
-            </span>
-          </div>
-          <div className="mt-2">
-            <code className="text-lg font-mono">{displayValue}</code>
-          </div>
-        </div>
-      )
-    })
-  }
-
-  const renderGroupsInfo = () => {
-    if (!adUser) return null
-    
-    return (
-      <>
-        <div className="border dark:border-gray-700 rounded p-3">
-          <div className="flex justify-between items-center mb-2">
-            <span className="font-medium text-gray-700 dark:text-gray-300">Grupos (memberOf)</span>
-            <span className={`text-xs px-2 py-1 rounded-full ${adUser.memberOf?.length ? 'text-green-500 bg-green-500/20' : 'text-yellow-500 bg-yellow-500/20'}`}>
-              {adUser.memberOf?.length || 0} grupos
-            </span>
-          </div>
-          {adUser.memberOf && adUser.memberOf.length > 0 ? (
-            <div className="max-h-40 overflow-y-auto mt-2 space-y-1">
-              {adUser.memberOf.map((group, index) => (
-                <div key={index} className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                  <code className="break-all">{group}</code>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-gray-500 dark:text-gray-400 text-sm italic">
-              No pertenece a ningún grupo
+          {/* NUEVO: Badge de ubicación en el avatar */}
+          {locationBadge && (
+            <div className={`absolute -bottom-1 -right-1 w-4 h-4 ${locationBadge.badgeColor} rounded-full border-2 border-white dark:border-gray-800`} 
+                 title={locationBadge.text}>
             </div>
           )}
         </div>
 
-        {adUser.groupAnalysis && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-            <div className="border dark:border-gray-700 rounded p-3">
-              <div className="flex justify-between">
-                <span className="font-medium text-gray-700 dark:text-gray-300">Es administrador</span>
-                <span className={`text-xs px-2 py-1 rounded-full ${adUser.groupAnalysis.isAdmin ? 'text-green-500 bg-green-500/20' : 'text-gray-500 bg-gray-500/20'}`}>
-                  {adUser.groupAnalysis.isAdmin ? 'Sí' : 'No'}
-                </span>
-              </div>
-              {adUser.groupAnalysis.adminGroups && adUser.groupAnalysis.adminGroups.length > 0 && (
-                <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-                  Grupos admin: {adUser.groupAnalysis.adminGroups.length}
-                </div>
-              )}
-            </div>
-            <div className="border dark:border-gray-700 rounded p-3">
-              <div className="flex justify-between">
-                <span className="font-medium text-gray-800 dark:text-gray-300">Estado cuenta</span>
-                <span className={`text-xs px-2 py-1 rounded-full ${adUser.isAccountEnabled ? 'text-green-500 bg-green-500/20' : 'text-red-500 bg-red-500/20'}`}>
-                  {adUser.isAccountEnabled ? 'Activa' : 'Inactiva'}
-                </span>
-              </div>
-            </div>
-            <div className="border dark:border-gray-700 rounded p-3">
-              <div className="flex justify-between">
-                <span className="font-medium text-gray-800 dark:text-gray-300">userAccountControl</span>
-                <code className="text-sm">{adUser.userAccountControl || 'N/A'}</code>
-              </div>
-            </div>
-          </div>
-        )}
-      </>
-    )
-  }
-
-  const renderMetadata = () => {
-    if (!adUser?._metadata) return null
-    
-    return (
-      <div className="border dark:border-gray-700 rounded p-3">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Object.entries(adUser._metadata).map(([key, value]) => {
-            const isBool = typeof value === 'boolean'
-            const displayValue = key === 'timestamp' && typeof value === 'string' 
-              ? new Date(value).toLocaleString() 
-              : safeStringify(value)
-            
-            return (
-              <div key={key} className="border-b dark:border-gray-700 pb-2 last:border-0">
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-700 dark:text-gray-300">
-                    {key}
-                  </span>
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    isBool
-                      ? (value ? 'text-green-500 bg-green-500/20' : 'text-red-500 bg-red-500/20')
-                      : 'text-blue-500 bg-blue-500/20'
-                  }`}>
-                    {isBool ? (value ? 'Sí' : 'No') : typeof value}
-                  </span>
-                </div>
-                <div className="mt-1">
-                  <code className="text-sm break-all">{displayValue}</code>
-                </div>
-              </div>
-            )
-          })}
+        <div className="hidden md:block text-left min-w-0">
+          <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate max-w-[140px]">
+            {getDisplayName()}
+          </p>
+          <p className="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[140px]">
+            {getUserInfo()}
+          </p>
+          
+          {/* NUEVO: Mostrar OU en el tooltip del botón */}
+          {primaryOU && (
+            <p className="text-xs text-gray-500 dark:text-gray-500 truncate max-w-[140px]">
+              {primaryOU}
+            </p>
+          )}
         </div>
-      </div>
-    )
-  }
 
-  return (
-    <>
-      <div className="relative" ref={menuRef}>
-        {/* Botón del avatar - versión compacta para header */}
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-3 p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-200"
-          aria-label="Abrir menú de usuario"
+        <svg
+          className={`hidden md:block w-4 h-4 text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
         >
-          {/* Avatar */}
-          <div className="flex justify-center items-center w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 shadow-sm">
-            <strong className="text-white font-semibold text-base">{getInitials()}</strong>
-          </div>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
 
-          {/* Información - oculta en móvil, visible en desktop */}
-          <div className="hidden md:block text-left">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate max-w-[120px]">
-              {getDisplayName()}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[120px]">
-              {getDepartment()}
-            </p>
-          </div>
-
-          {/* Ícono flecha */}
-          <svg 
-            className={`hidden md:block w-4 h-4 text-gray-400 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-
-        {/* Menú desplegable */}
-        <div className={`absolute top-full right-0 mt-2 transition-all duration-300 origin-top-right z-40 ${
-          isOpen 
-            ? 'opacity-100 scale-100 translate-y-0' 
-            : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
+      <div className={`absolute top-full right-0 mt-2 transition-all duration-200 origin-top-right z-50 ${isOpen
+        ? 'opacity-100 scale-100 translate-y-0'
+        : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
         }`}>
-          <div className="relative">
-            {/* Triángulo indicador */}
-            <div className="absolute -top-1.5 right-3 w-3 h-3 bg-white dark:bg-gray-800 rotate-45 border-l border-t border-gray-200 dark:border-gray-700" />
-            
-            {/* Contenido del menú */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 min-w-[200px] overflow-hidden">
-              {/* Información del usuario en el menú */}
-              <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-                <p className="font-medium text-gray-800 dark:text-gray-100 truncate">
-                  {getDisplayName()}
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">
-                  {getEmail()}
-                </p>
-                {/* Información adicional de AD */}
-                {(adUser?.title || adUser?.department) && (
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {adUser?.department && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                        {adUser.department}
-                      </span>
+        <div className="relative">
+          <div className="absolute -top-2 right-3 w-4 h-4 bg-white dark:bg-gray-800 rotate-45 border-l border-t border-gray-200 dark:border-gray-700" />
+
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 min-w-[320px] overflow-hidden">
+            <div className="px-4 py-4 border-b border-gray-100 dark:border-gray-700">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0">
+                  <div className="flex justify-center items-center w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600">
+                    <span className="text-white font-bold text-lg">{getInitials()}</span>
+                  </div>
+                  
+                  {/* NUEVO: Badge de ubicación más grande */}
+                  {locationBadge && (
+                    <div className={`mt-2 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${locationBadge.color}`}>
+                      <span>{locationBadge.icon}</span>
+                      <span>{locationBadge.text}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-gray-900 dark:text-white truncate">
+                    {getDisplayName()}
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 truncate">
+                    {getEmail()}
+                  </p>
+
+                  {employeeId && (
+                    <div className="mt-2 flex items-center gap-2 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 px-3 py-2 rounded-lg">
+                      <div className="flex-shrink-0 w-8 h-8 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
+                        <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400">ID Empleado</p>
+                        <p className="text-lg font-bold text-gray-900 dark:text-white">{employeeId}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-3 space-y-1">
+                    {department && (
+                      <div className="flex items-center gap-2">
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                        <span className="text-sm text-gray-600 dark:text-gray-300">{department}</span>
+                      </div>
                     )}
-                    {adUser?.title && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
-                        {adUser.title}
-                      </span>
+
+                    {title && (
+                      <div className="flex items-center gap-2">
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        <span className="text-sm text-gray-600 dark:text-gray-300">{title}</span>
+                      </div>
                     )}
+                  </div>
+                </div>
+              </div>
+
+              {/* NUEVO: Sección de estructura de OU */}
+              <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    Estructura Organizativa
+                  </h4>
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+                
+                <div className="space-y-2">
+                  {/* Ruta completa */}
+                  <div className="flex items-start gap-2">
+                    <svg className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-600 dark:text-gray-300 truncate" title={ouDisplay}>
+                        {ouDisplay}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                        {ouStructure.fullPath.length} nivel{ouStructure.fullPath.length !== 1 ? 'es' : ''} organizativo{ouStructure.fullPath.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Detalles específicos */}
+                  <div className="grid grid-cols-2 gap-2 mt-3">
+                    {ouStructure.colombia && (
+                      <div className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Colombia</p>
+                          <p className="text-sm text-gray-800 dark:text-gray-200 truncate">{ouStructure.colombia}</p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {ouStructure.ti && (
+                      <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">TI</p>
+                          <p className="text-sm text-gray-800 dark:text-gray-200 truncate">{ouStructure.ti}</p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {ouStructure.platform && (
+                      <div className="flex items-center gap-2 p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                        <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Plataforma</p>
+                          <p className="text-sm text-gray-800 dark:text-gray-200 truncate">{ouStructure.platform}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Indicador visual de la ruta */}
+                {ouStructure.fullPath.length > 0 && (
+                  <div className="mt-3">
+                    <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 mb-2">
+                      <span>Jerarquía:</span>
+                    </div>
+                    <div className="relative">
+                      <div className="absolute left-3 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-gray-700"></div>
+                      <div className="space-y-2">
+                        {ouStructure.fullPath.map((ou, index) => (
+                          <div key={index} className="flex items-center relative">
+                            <div className={`z-10 w-6 h-6 rounded-full flex items-center justify-center mr-3 
+                              ${index === 0 ? 'bg-blue-500' : 
+                                index === ouStructure.fullPath.length - 1 ? 'bg-green-500' : 
+                                'bg-gray-400'}`}>
+                              <span className="text-white text-xs font-bold">{index + 1}</span>
+                            </div>
+                            <div className={`flex-1 p-2 rounded-lg ${index === ouStructure.fullPath.length - 1 ? 
+                              'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 
+                              'bg-gray-50 dark:bg-gray-800'}`}>
+                              <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{ou}</p>
+                              {index === 0 && (
+                                <p className="text-xs text-gray-500 dark:text-gray-500">Nivel superior</p>
+                              )}
+                              {index === ouStructure.fullPath.length - 1 && (
+                                <p className="text-xs text-green-600 dark:text-green-400">Ubicación actual</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
-              
-              {/* Opciones */}
-              <div className="py-1">
-                <a
-                  href="/perfil"
-                  className="flex items-center px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                  onClick={() => setIsOpen(false)}
-                >
-                  <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            </div>
+
+            <div className="py-2">
+              <a
+                href="/perfil"
+                className="flex items-center px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group"
+                onClick={() => setIsOpen(false)}
+              >
+                <div className="mr-3 p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30 group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50 transition-colors">
+                  <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
-                  Mi perfil
-                </a>
-                
-                <a
-                  href="/configuracion"
-                  className="flex items-center px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                  onClick={() => setIsOpen(false)}
-                >
-                  <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                </div>
+                Mi perfil
+              </a>
+
+              <a
+                href="/configuracion"
+                className="flex items-center px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group"
+                onClick={() => setIsOpen(false)}
+              >
+                <div className="mr-3 p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30 group-hover:bg-purple-200 dark:group-hover:bg-purple-900/50 transition-colors">
+                  <svg className="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
-                  Configuración
-                </a>
-              </div>
-              
-              {/* Separador */}
-              <div className="border-t border-gray-100 dark:border-gray-700" />
-              
-              {/* Opción de DEBUG - solo si hay datos AD */}
-              {adUser && (
-                <button
-                  onClick={() => {
-                    setShowADModal(true)
-                    setIsOpen(false)
-                  }}
-                  className="flex items-center w-full px-4 py-2.5 text-sm text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
-                >
-                  <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                  </svg>
-                  Ver datos AD ({stats.filled}/{stats.total})
-                </button>
-              )}
-              
-              {/* Cerrar sesión */}
-              <button
-                onClick={handleSignOut}
-                className="flex items-center w-full px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                </div>
+                Configuración
+              </a>
+
+              {/* NUEVO: Enlace a información de OU */}
+              <a
+                href="/organizacion"
+                className="flex items-center px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group"
+                onClick={() => setIsOpen(false)}
               >
-                <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                <div className="mr-3 p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 group-hover:bg-indigo-200 dark:group-hover:bg-indigo-900/50 transition-colors">
+                  <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                </div>
+                Mi organización
+              </a>
+            </div>
+
+            <div className="border-t border-gray-100 dark:border-gray-700" />
+
+            <button
+              onClick={handleSignOut}
+              className="flex items-center w-full px-4 py-3 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors group"
+            >
+              <div className="mr-3 p-2 rounded-lg bg-red-100 dark:bg-red-900/30 group-hover:bg-red-200 dark:group-hover:bg-red-900/50 transition-colors">
+                <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
-                Cerrar sesión
-              </button>
+              </div>
+              Cerrar sesión
+            </button>
+
+            {/* NUEVO: Footer con información de metadatos */}
+            <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
+              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                <span>Fuente: Active Directory</span>
+                {session.user?.adUser?._metadata?.timestamp && (
+                  <span title={session.user.adUser._metadata.timestamp}>
+                    {new Date(session.user.adUser._metadata.timestamp).toLocaleTimeString()}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Modal de datos AD */}
-      {showADModal && adUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-              <div>
-                <h2 className="text-xl font-bold text-gray-800 dark:text-white">
-                  📊 Datos del Usuario AD
-                </h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {adUser.displayName || 'Usuario'}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="text-sm bg-gray-200 dark:bg-gray-700 px-3 py-1 rounded-full">
-                  {stats.filled}/{stats.total} campos llenos
-                </div>
-                <button
-                  onClick={() => setShowADModal(false)}
-                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-2xl"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-
-            {/* Contenido - Scrollable */}
-            <div className="flex-1 overflow-y-auto p-4">
-              {/* Información básica */}
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white">
-                  📋 Información Básica
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {renderBasicInfo()}
-                </div>
-              </div>
-
-              {/* Información organizacional */}
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white">
-                  🏢 Información Organizacional
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {renderOrganizationalInfo()}
-                </div>
-              </div>
-
-              {/* Información de contacto */}
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white">
-                  📞 Contacto
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {renderContactInfo()}
-                </div>
-              </div>
-
-              {/* Grupos */}
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white">
-                  👥 Grupos y Permisos
-                </h3>
-                <div className="space-y-3">
-                  {renderGroupsInfo()}
-                </div>
-              </div>
-
-              {/* Metadatos */}
-              {adUser._metadata && (
-                <div className="mb-6">
-                  <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white">
-                    🔧 Metadatos Técnicos
-                  </h3>
-                  {renderMetadata()}
-                </div>
-              )}
-
-              {/* Datos en crudo JSON */}
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white">
-                  📄 Datos en Crudo (JSON)
-                </h3>
-                <div className="border dark:border-gray-700 rounded p-3">
-                  <div className="bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto">
-                    <pre className="text-xs whitespace-pre-wrap break-words">
-                      {JSON.stringify(adUser, null, 2)}
-                    </pre>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="border-t dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-800">
-              <div className="flex justify-between items-center">
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  <span className="font-medium">Fuente:</span> {adUser._metadata?.source || 'Desconocida'}
-                </div>
-                <button
-                  onClick={() => setShowADModal(false)}
-                  className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                >
-                  Cerrar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+    </div>
   )
 }
