@@ -1,16 +1,108 @@
 // lib/auth.ts
-import { NextAuthOptions } from "next-auth";
+import { NextAuthOptions, User } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { LdapClient } from "@/lib/ldap-client";
+import { UserSyncService, SyncResult } from "@/lib/user-sync";
 
 // Cargar OUs permitidas desde variables de entorno
-const ALLOWED_OUS = process.env.ALLOWED_OUS 
-  ? process.env.ALLOWED_OUS.split(',').map(ou => ou.trim()).filter(ou => ou.length > 0)
-  : [];
+const ALLOWED_OUS = process.env.ALLOWED_OUS
+  ? process.env.ALLOWED_OUS.split(',').map(ou => ou.trim().toLowerCase()).filter(ou => ou.length > 0)
+  : ['colombia'];
 
 const BLOCKED_OUS = process.env.BLOCKED_OUS
-  ? process.env.BLOCKED_OUS.split(',').map(ou => ou.trim()).filter(ou => ou.length > 0)
+  ? process.env.BLOCKED_OUS.split(',').map(ou => ou.trim().toLowerCase()).filter(ou => ou.length > 0)
   : [];
+
+// Función para extraer OU del DN
+function extractOUFromDN(dn: string): string | null {
+  if (!dn) return null;
+
+  try {
+    const parts = dn.split(',').map(part => part.trim());
+
+    for (const part of parts) {
+      if (part.toUpperCase().startsWith('OU=')) {
+        return part.substring(3);
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Función para extraer todas las OUs
+function extractAllOUsFromDN(dn: string): string[] {
+  if (!dn) return [];
+
+  try {
+    const ous: string[] = [];
+    const parts = dn.split(',').map(part => part.trim());
+
+    for (const part of parts) {
+      if (part.toUpperCase().startsWith('OU=')) {
+        ous.push(part.substring(3));
+      }
+    }
+
+    return ous;
+  } catch {
+    return [];
+  }
+}
+
+// Función de validación de OU
+function validateUserOUAccess(userOU: string | null, userAllOUs: string[]): {
+  allowed: boolean;
+  message?: string;
+} {
+  if (!userOU) {
+    return {
+      allowed: false,
+      message: 'No se pudo determinar la unidad organizativa'
+    };
+  }
+
+  const userOULower = userOU.toLowerCase();
+  const userAllOUsLower = userAllOUs.map(ou => ou.toLowerCase());
+
+  if (ALLOWED_OUS.length === 0) {
+    return {
+      allowed: true,
+      message: 'Sin restricciones de OU configuradas'
+    };
+  }
+
+  // Verificar si está bloqueada
+  const isBlocked = BLOCKED_OUS.some(blockedOU =>
+    userAllOUsLower.includes(blockedOU) || userOULower === blockedOU
+  );
+
+  if (isBlocked) {
+    return {
+      allowed: false,
+      message: `Acceso bloqueado. Usuario pertenece a una OU restringida`
+    };
+  }
+
+  // Verificar si está permitida
+  const isAllowed = ALLOWED_OUS.some(allowedOU =>
+    userAllOUsLower.includes(allowedOU) || userOULower === allowedOU
+  );
+
+  if (isAllowed) {
+    return {
+      allowed: true,
+      message: `Acceso permitido`
+    };
+  }
+
+  return {
+    allowed: false,
+    message: `Acceso denegado. Usuario no pertenece a una OU permitida`
+  };
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -27,168 +119,144 @@ export const authOptions: NextAuthOptions = {
 
         try {
           const ldapClient = new LdapClient();
-          const username = credentials.username.trim().toLowerCase();
-          
+          const username = credentials.username.trim();
+
           // 1. Autenticar usuario
-          const authResult = await ldapClient.authenticateUser(
-            username,
-            credentials.password
-          );
+          const authResult = await ldapClient.authenticateUser(username, credentials.password);
 
           if (!authResult.authenticated) {
-            throw new Error(authResult.message || 'Autenticación fallida');
+            throw new Error(authResult.message || 'Credenciales incorrectas');
           }
 
-          // 2. Obtener datos completos del usuario (INCLUYENDO employeeID)
-          const userDataResult = await ldapClient.getUserDetails(
-            username, 
-            [
-              'sAMAccountName', 
-              'displayName', 
-              'mail', 
-              'distinguishedName', 
-              'memberOf',
-              'employeeID',           // ← AÑADIDO
-              'employeeNumber',       // ← AÑADIDO
-              'title',                // ← AÑADIDO
-              'department'            // ← AÑADIDO
-            ]
-          );
-          
-          if (!userDataResult.success) {
+          // 2. Obtener datos del usuario
+          const userDataResult = await ldapClient.getUserDetails(username);
+
+          if (!userDataResult.success || !userDataResult.data) {
             throw new Error(userDataResult.error || 'Error obteniendo datos del usuario');
           }
-          
+
           const userData = userDataResult.data;
-          
-          // 3. Validar OU del usuario
-          const userOU = userData.ou;
-          const userAllOUs = userData.allOUs || [];
-          
-          if (!userOU) {
-            throw new Error('No se pudo determinar la unidad organizativa del usuario');
-          }
-          
-          // 4. Validar si tiene acceso según OU
+
+          // 3. Extraer información de OU
+          const dn = userData.distinguishedName || '';
+          const userOU = extractOUFromDN(dn);
+          const userAllOUs = extractAllOUsFromDN(dn);
+
+          // 4. Validar acceso según OU
           const ouValidation = validateUserOUAccess(userOU, userAllOUs);
-          
+
           if (!ouValidation.allowed) {
-            throw new Error(ouValidation.message || 'Acceso denegado por configuración de OU');
+            throw new Error(ouValidation.message || 'Acceso denegado');
           }
-          
-          // 5. Crear objeto de usuario con información de OU
+
+          // 5. Sincronizar con base de datos
+          let syncResult: SyncResult = { success: false, message: 'No sincronizado' };
+
+          try {
+            syncResult = await UserSyncService.syncUserFromAD(userData);
+          } catch {
+            // Ignorar errores de sincronización, no deben bloquear el login
+          }
+
+          // 6. Crear objeto de usuario para NextAuth
           const authUser = {
-          id: userData.sAMAccountName,
-          name: userData.displayName,
-          email: userData.mail,
-          adUser: {
-            ...userData,
-            ou: userOU,
+            id: userData.sAMAccountName || username,
+            name: userData.displayName || username,
+            email: userData.mail || undefined,
+            employeeID: userData.employeeID || userData.sAMAccountName,
+            ou: userOU || undefined,
             allOUs: userAllOUs,
-            // NUEVO: Incluir estructura de OU
-            ouStructure: userData.ouStructure,
-            isOUAllowed: ouValidation.allowed,
-            _metadata: userData._metadata
-          },
-          ou: userOU,
-          allOUs: userAllOUs,
-          // NUEVO: Incluir estructura de OU directamente
-          ouStructure: userData.ouStructure
-        };
+            adUser: userData,
+            syncData: syncResult.success ? {
+              dbUserId: syncResult.user?.id,
+              action: syncResult.action,
+              timestamp: new Date().toISOString()
+            } : undefined
+          };
 
           return authUser;
 
         } catch (error: any) {
-          console.error('Error en autenticación:', error.message);
-          throw new Error(`Error de autenticación: ${error.message}`);
+          throw new Error(error.message || 'Error de autenticación');
         }
       }
     })
   ],
-  
+
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
+      // Inicializar arrays si no existen
+      token.allOUs = token.allOUs || [];
+
+      // Cuando el usuario inicia sesión por primera vez
       if (user) {
         token.id = user.id;
         token.name = user.name;
         token.email = user.email;
-        token.adUser = (user as any).adUser;
+        token.employeeID = (user as any).employeeID;
         token.ou = (user as any).ou;
-        token.allOUs = (user as any).allOUs;
-        // NUEVO: Pasar estructura de OU
-        token.ouStructure = (user as any).ouStructure;
+        token.allOUs = (user as any).allOUs || [];
+        token.adUser = (user as any).adUser;
+        token.syncData = (user as any).syncData;
+
+        // Si ya tenemos data de sync, asignar dbUser inmediatamente
+        if ((user as any).syncData?.dbUserId) {
+          try {
+            const dbUser = await UserSyncService.getUserById((user as any).syncData.dbUserId);
+            token.dbUser = dbUser;
+          } catch (error) {
+            console.warn('Error al obtener usuario por ID:', error);
+          }
+        }
       }
+
+      // Solo verificar en BD si no tenemos dbUser o si la sesión fue actualizada
+      if (token.id && !token.dbUser) {
+        try {
+          const syncResult = await UserSyncService.verifyAndSyncUserSession(token.id);
+          if (syncResult.success && syncResult.user) {
+            token.dbUser = syncResult.user;
+          }
+        } catch (error) {
+          // Silenciar error
+        }
+      }
+
+      // Permitir actualización manual de la sesión
+      if (trigger === "update" && session?.dbUser) {
+        token.dbUser = session.dbUser;
+      }
+
       return token;
     },
-    
-     async session({ session, token }) {
-      if (session.user) {
+
+    async session({ session, token }) {
+      if (token && session.user) {
         session.user.id = token.id as string;
         session.user.name = token.name as string;
         session.user.email = token.email as string;
-        session.user.adUser = token.adUser as any;
+        session.user.employeeID = token.employeeID as string;
         session.user.ou = token.ou as string;
         session.user.allOUs = token.allOUs as string[];
-        // NUEVO: Incluir estructura de OU en la sesión
-        session.user.ouStructure = token.ouStructure as any;
+        session.user.adUser = token.adUser as any;
+        session.user.syncData = token.syncData as any;
+        session.user.dbUser = token.dbUser as any;
       }
       return session;
     }
   },
-  
+
   pages: {
     signIn: "/auth/login",
+    error: "/auth/error"
   },
-  
+
   session: {
     strategy: "jwt",
+    maxAge: 8 * 60 * 60,
   },
-  
+
   secret: process.env.NEXTAUTH_SECRET,
-  
+
   debug: process.env.NODE_ENV === 'development',
 };
-
-// Función de validación de OU
-function validateUserOUAccess(userOU: string, userAllOUs: string[]): {
-  allowed: boolean;
-  message?: string;
-} {
-  // Si no hay OUs definidas, permitir todas
-  if (ALLOWED_OUS.length === 0) {
-    return { allowed: true, message: 'Sin restricciones de OU' };
-  }
-  
-  // Verificar si está bloqueada
-  const isBlocked = BLOCKED_OUS.some(blockedOU => 
-    userAllOUs.some(userOUItem => 
-      userOUItem.toLowerCase() === blockedOU.toLowerCase()
-    ) || userOU.toLowerCase() === blockedOU.toLowerCase()
-  );
-  
-  if (isBlocked) {
-    return { 
-      allowed: false, 
-      message: `Usuario bloqueado. OU: ${userOU}` 
-    };
-  }
-  
-  // Verificar si está permitida
-  const isAllowed = ALLOWED_OUS.some(allowedOU => 
-    userAllOUs.some(userOUItem => 
-      userOUItem.toLowerCase() === allowedOU.toLowerCase()
-    ) || userOU.toLowerCase() === allowedOU.toLowerCase()
-  );
-  
-  if (isAllowed) {
-    return { 
-      allowed: true, 
-      message: `Usuario permitido. OU: ${userOU}` 
-    };
-  }
-  
-  return { 
-    allowed: false, 
-    message: `Acceso denegado. Usuario en OU "${userOU}". Permitidas: ${ALLOWED_OUS.join(', ')}` 
-  };
-}

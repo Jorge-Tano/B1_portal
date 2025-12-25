@@ -2,18 +2,18 @@ import { Pool } from 'pg';
 
 // Configuración de la conexión
 const pool = new Pool({
-  host: process.env.POSTGRES_HOST,
-  port: parseInt(process.env.POSTGRES_PORT),
-  database: process.env.POSTGRES_DB,
-  user: process.env.POSTGRES_USER,
-  password: process.env.POSTGRES_PASSWORD,
-  max: 20, // máximo de clientes en el pool
+  host: process.env.POSTGRES_HOST as string,
+  port: parseInt(process.env.POSTGRES_PORT as string),
+  database: process.env.POSTGRES_DB as string,
+  user: process.env.POSTGRES_USER as string,
+  password: process.env.POSTGRES_PASSWORD as string,
+  max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
 });
 
 // Manejo de errores de conexión
-pool.on('error', (err) => {
+pool.on('error', (err: Error) => {
   console.error('Unexpected error on idle client', err);
   process.exit(-1);
 });

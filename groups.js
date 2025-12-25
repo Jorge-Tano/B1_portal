@@ -772,4 +772,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = ColombiaUserLister;   
+module.exports = ColombiaUserLister;

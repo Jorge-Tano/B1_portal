@@ -1,15 +1,99 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react'
-import { signOut, useSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
+import { useState, useRef, useEffect } from 'react';
+import { signOut, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEnrichedSession } from '@/hooks/use-enriched-session';
 
-export function UserAvatarMenu() {
-  const [isOpen, setIsOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
-  const router = useRouter()
-  const { data: session, status } = useSession()
+// Definir tipos para la sesión enriquecida
+interface ADUser {
+  sAMAccountName?: string;
+  displayName?: string;
+  mail?: string;
+  employeeID?: string;
+  employeeNumber?: string;
+  department?: string;
+  title?: string;
+  distinguishedName?: string;
+}
 
+interface SyncData {
+  dbUserId?: number;
+  action?: string;
+  timestamp?: string;
+}
+
+interface DbUser {
+  id: number;
+  employeeID: string;
+  name: string;
+  email?: string;
+  campaign_id?: number;
+  role?: string;
+  document_type?: number;
+  bank_number?: number;
+  ou?: string;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+interface EnrichedSessionUser {
+  id: string;
+  name: string;
+  email?: string;
+  employeeID: string;
+  ou?: string;
+  allOUs: string[];
+  adUser: ADUser;
+  syncData?: SyncData;
+  dbUser: DbUser | null;
+}
+
+interface EnrichedSession {
+  user: EnrichedSessionUser;
+  expires: string;
+}
+
+export function AvatarMenu() {
+  // === 1. TODOS LOS HOOKS PRIMERO ===
+  const [isOpen, setIsOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  
+  // Usar la sesión enriquecida que incluye dbUser
+  const { session, status, refreshDbData } = useEnrichedSession();
+  const enrichedSession = session as EnrichedSession | null;
+  
+  // === 2. Effects ===
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // === 3. Handlers ===
+  const handleRefreshData = async () => {
+    setRefreshing(true);
+    await refreshDbData();
+    setRefreshing(false);
+  };
+
+  const handleSignOut = async () => {
+    await signOut({
+      redirect: false,
+      callbackUrl: "/login"
+    });
+    router.push("/login");
+    setIsOpen(false);
+  };
+
+  // === 4. Lógica condicional DESPUÉS de todos los hooks ===
   if (status === "loading") {
     return (
       <div className="flex items-center gap-3 p-1.5">
@@ -21,10 +105,10 @@ export function UserAvatarMenu() {
           <div className="h-3 w-16 bg-gray-200 rounded animate-pulse"></div>
         </div>
       </div>
-    )
+    );
   }
 
-  if (!session) {
+  if (!enrichedSession?.user) {
     return (
       <a
         href="/login"
@@ -32,61 +116,87 @@ export function UserAvatarMenu() {
       >
         Iniciar sesión
       </a>
-    )
+    );
   }
 
+  const user = enrichedSession.user;
+
+  // === 5. Funciones helper con datos combinados (AD + BD) ===
   const getEmployeeId = (): string | null => {
-    const adUser = session.user?.adUser;
-    if (adUser?.employeeID && adUser.employeeID.trim() !== '') {
-      return adUser.employeeID.trim();
+    // Prioridad 1: dbUser de la base de datos
+    if (user.dbUser?.employeeID) {
+      return user.dbUser.employeeID.trim();
+    }
+    
+    // Prioridad 2: AD user employeeID
+    if (user.adUser?.employeeID && user.adUser.employeeID.trim() !== '') {
+      return user.adUser.employeeID.trim();
     }
 
-    if (adUser?.employeeNumber && adUser.employeeNumber.trim() !== '') {
-      return adUser.employeeNumber.trim();
+    // Prioridad 3: AD user employeeNumber
+    if (user.adUser?.employeeNumber && user.adUser.employeeNumber.trim() !== '') {
+      return user.adUser.employeeNumber.trim();
     }
 
-    return null;
+    // Prioridad 4: Username de la sesión
+    return user.id || null;
   };
 
   const getInitials = (): string => {
-    const adUser = session.user?.adUser;
-
-    if (adUser?.displayName) {
-      const names = adUser.displayName.split(' ');
+    // Prioridad 1: Nombre de la base de datos
+    if (user.dbUser?.name) {
+      const names = user.dbUser.name.split(' ');
       if (names.length >= 2) {
         return `${names[0].charAt(0)}${names[1].charAt(0)}`.toUpperCase();
       }
       return names[0].charAt(0).toUpperCase();
     }
 
-    if (session.user?.name) {
-      const names = session.user.name.split(' ');
+    // Prioridad 2: AD user displayName
+    if (user.adUser?.displayName) {
+      const names = user.adUser.displayName.split(' ');
       if (names.length >= 2) {
         return `${names[0].charAt(0)}${names[1].charAt(0)}`.toUpperCase();
       }
       return names[0].charAt(0).toUpperCase();
     }
 
-    if (session.user?.email) {
-      return session.user.email.charAt(0).toUpperCase();
+    // Prioridad 3: Nombre de la sesión
+    if (user.name) {
+      const names = user.name.split(' ');
+      if (names.length >= 2) {
+        return `${names[0].charAt(0)}${names[1].charAt(0)}`.toUpperCase();
+      }
+      return names[0].charAt(0).toUpperCase();
+    }
+
+    // Prioridad 4: Email
+    if (user.email) {
+      return user.email.charAt(0).toUpperCase();
     }
 
     return 'U';
   };
 
   const getDisplayName = (): string => {
-    const adUser = session.user?.adUser;
-
-    if (adUser?.displayName) {
-      return adUser.displayName;
+    // Prioridad 1: Nombre de la base de datos
+    if (user.dbUser?.name) {
+      return user.dbUser.name;
     }
 
-    if (session.user?.name) {
-      return session.user.name;
+    // Prioridad 2: AD user displayName
+    if (user.adUser?.displayName) {
+      return user.adUser.displayName;
     }
 
-    if (adUser?.sAMAccountName) {
-      return adUser.sAMAccountName;
+    // Prioridad 3: Nombre de la sesión
+    if (user.name) {
+      return user.name;
+    }
+
+    // Prioridad 4: AD user sAMAccountName
+    if (user.adUser?.sAMAccountName) {
+      return user.adUser.sAMAccountName;
     }
 
     return 'Usuario';
@@ -99,53 +209,128 @@ export function UserAvatarMenu() {
       return `ID: ${employeeId}`;
     }
 
-    const adUser = session.user?.adUser;
-    if (adUser?.sAMAccountName) {
-      return adUser.sAMAccountName;
+    if (user.adUser?.sAMAccountName) {
+      return user.adUser.sAMAccountName;
     }
 
-    if (adUser?.title) {
-      return adUser.title;
+    if (user.adUser?.title) {
+      return user.adUser.title;
     }
 
     return 'Usuario';
   };
 
   const getEmail = (): string => {
-    const adUser = session.user?.adUser;
-
-    if (adUser?.mail) {
-      return adUser.mail;
+    // Prioridad 1: Email de la base de datos
+    if (user.dbUser?.email) {
+      return user.dbUser.email;
     }
 
-    if (session.user?.email) {
-      return session.user.email;
+    // Prioridad 2: AD user mail
+    if (user.adUser?.mail) {
+      return user.adUser.mail;
     }
 
-    return 'usuario@2cal1.c1';
+    // Prioridad 3: Email de la sesión
+    if (user.email) {
+      return user.email;
+    }
+
+    return 'usuario@ejemplo.com';
   };
 
   const getDepartment = (): string | null => {
-    const adUser = session.user?.adUser;
-    return adUser?.department || null;
+    // Prioridad 1: AD user department
+    if (user.adUser?.department) {
+      return user.adUser.department;
+    }
+    
+    return null;
   };
 
   const getTitle = (): string | null => {
-    const adUser = session.user?.adUser;
-    return adUser?.title || null;
-  };
-
-  // NUEVO: Obtener estructura de OU
-  const getOUStructure = () => {
-    const adUser = session.user?.adUser;
-    
-    if (adUser?.ouStructure) {
-      return adUser.ouStructure;
+    // Prioridad 1: AD user title
+    if (user.adUser?.title) {
+      return user.adUser.title;
     }
     
-    // Si no hay estructura específica, crear una básica
-    const userAllOUs = session.user?.allOUs || [];
+    return null;
+  };
+
+  const getRole = (): string | null => {
+    // Prioridad 1: Rol de la base de datos
+    if (user.dbUser?.role) {
+      return user.dbUser.role;
+    }
     
+    return null;
+  };
+
+  const getCampaign = (): string | null => {
+    // Solo disponible desde la base de datos
+    if (user.dbUser?.campaign_id) {
+      // Aquí podrías buscar el nombre de la campaña si lo necesitas
+      return `Campaña #${user.dbUser.campaign_id}`;
+    }
+    
+    return null;
+  };
+
+  const getRoleColor = (role?: string): string => {
+    const userRole = role || getRole();
+    
+    switch (userRole?.toLowerCase()) {
+      case 'administrador':
+      case 'admin':
+        return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+      case 'supervisor':
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+      case 'aprobador':
+        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+      case 'revisor':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+      case 'ejecutivo':
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
+      default:
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
+    }
+  };
+
+  const getRoleBadge = () => {
+    const role = getRole();
+    if (!role) return null;
+
+    return {
+      text: role.charAt(0).toUpperCase() + role.slice(1),
+      color: getRoleColor(role),
+      icon: getRoleIcon(role)
+    };
+  };
+
+  const getRoleIcon = (role?: string): string => {
+    const userRole = role || getRole();
+    
+    switch (userRole?.toLowerCase()) {
+      case 'administrador':
+      case 'admin':
+        return '👑';
+      case 'supervisor':
+        return '👔';
+      case 'aprobador':
+        return '✅';
+      case 'revisor':
+        return '👁️';
+      case 'ejecutivo':
+        return '👨‍💼';
+      default:
+        return '👤';
+    }
+  };
+
+  const getOUStructure = () => {
+    const userAllOUs = user.allOUs || [];
+    
+    // Si no hay estructura específica, crear una básica
     return {
       colombia: userAllOUs.find(ou => ou.toLowerCase() === 'colombia'),
       ti: userAllOUs.find(ou => ou.toLowerCase() === 'ti'),
@@ -157,18 +342,6 @@ export function UserAvatarMenu() {
     };
   };
 
-  // NUEVO: Obtener display de OU
-  const getOUDisplay = (): string => {
-    const ouStructure = getOUStructure();
-    
-    if (ouStructure.fullPath && ouStructure.fullPath.length > 0) {
-      return ouStructure.fullPath.join(' → ');
-    }
-    
-    return session.user?.ou || 'Sin OU';
-  };
-
-  // NUEVO: Obtener badge de ubicación
   const getLocationBadge = () => {
     const ouStructure = getOUStructure();
     
@@ -201,8 +374,13 @@ export function UserAvatarMenu() {
     return null;
   };
 
-  // NUEVO: Obtener OU primaria
   const getPrimaryOU = (): string | null => {
+    // Prioridad 1: OU de la base de datos
+    if (user.dbUser?.ou) {
+      return user.dbUser.ou;
+    }
+
+    // Prioridad 2: OU de AD
     const ouStructure = getOUStructure();
     
     if (ouStructure.colombia) return ouStructure.colombia;
@@ -212,37 +390,20 @@ export function UserAvatarMenu() {
     const fullPath = ouStructure.fullPath;
     if (fullPath.length > 0) return fullPath[0];
     
-    return session.user?.ou || null;
+    return user.ou || null;
   };
 
-  const handleSignOut = async () => {
-    await signOut({
-      redirect: false,
-      callbackUrl: "/login"
-    });
-    router.push("/login");
-    setIsOpen(false);
-  };
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
+  // === 6. Obtener datos para render ===
   const employeeId = getEmployeeId();
   const department = getDepartment();
   const title = getTitle();
-  const ouStructure = getOUStructure();
+  const role = getRole();
+  const roleBadge = getRoleBadge();
   const locationBadge = getLocationBadge();
-  const ouDisplay = getOUDisplay();
   const primaryOU = getPrimaryOU();
+  const campaign = getCampaign();
 
+  // === 7. Render principal ===
   return (
     <div className="relative" ref={menuRef}>
       <button
@@ -262,11 +423,18 @@ export function UserAvatarMenu() {
             </div>
           )}
 
-          {/* NUEVO: Badge de ubicación en el avatar */}
           {locationBadge && (
-            <div className={`absolute -bottom-1 -right-1 w-4 h-4 ${locationBadge.badgeColor} rounded-full border-2 border-white dark:border-gray-800`} 
-                 title={locationBadge.text}>
-            </div>
+            <div 
+              className={`absolute -bottom-1 -right-1 w-4 h-4 ${locationBadge.badgeColor} rounded-full border-2 border-white dark:border-gray-800`} 
+              title={locationBadge.text}
+            />
+          )}
+
+          {roleBadge && (
+            <div 
+              className={`absolute -bottom-1 -left-1 w-4 h-4 ${roleBadge.color.split(' ')[0]} rounded-full border-2 border-white dark:border-gray-800`} 
+              title={roleBadge.text}
+            />
           )}
         </div>
 
@@ -278,10 +446,9 @@ export function UserAvatarMenu() {
             {getUserInfo()}
           </p>
           
-          {/* NUEVO: Mostrar OU en el tooltip del botón */}
-          {primaryOU && (
+          {(primaryOU || role) && (
             <p className="text-xs text-gray-500 dark:text-gray-500 truncate max-w-[140px]">
-              {primaryOU}
+              {primaryOU}{role ? ` • ${role}` : ''}
             </p>
           )}
         </div>
@@ -296,10 +463,11 @@ export function UserAvatarMenu() {
         </svg>
       </button>
 
-      <div className={`absolute top-full right-0 mt-2 transition-all duration-200 origin-top-right z-50 ${isOpen
-        ? 'opacity-100 scale-100 translate-y-0'
-        : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
-        }`}>
+      <div className={`absolute top-full right-0 mt-2 transition-all duration-200 origin-top-right z-50 ${
+        isOpen
+          ? 'opacity-100 scale-100 translate-y-0'
+          : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
+      }`}>
         <div className="relative">
           <div className="absolute -top-2 right-3 w-4 h-4 bg-white dark:bg-gray-800 rotate-45 border-l border-t border-gray-200 dark:border-gray-700" />
 
@@ -311,22 +479,52 @@ export function UserAvatarMenu() {
                     <span className="text-white font-bold text-lg">{getInitials()}</span>
                   </div>
                   
-                  {/* NUEVO: Badge de ubicación más grande */}
-                  {locationBadge && (
-                    <div className={`mt-2 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${locationBadge.color}`}>
-                      <span>{locationBadge.icon}</span>
-                      <span>{locationBadge.text}</span>
-                    </div>
-                  )}
+                  <div className="mt-2 space-y-1">
+                    {locationBadge && (
+                      <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${locationBadge.color}`}>
+                        <span>{locationBadge.icon}</span>
+                        <span>{locationBadge.text}</span>
+                      </div>
+                    )}
+
+                    {roleBadge && (
+                      <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${roleBadge.color}`}>
+                        <span>{roleBadge.icon}</span>
+                        <span>{roleBadge.text}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-gray-900 dark:text-white truncate">
-                    {getDisplayName()}
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 truncate">
-                    {getEmail()}
-                  </p>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="font-bold text-gray-900 dark:text-white truncate">
+                        {getDisplayName()}
+                      </h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 truncate">
+                        {getEmail()}
+                      </p>
+                    </div>
+                    
+                    <button
+                      onClick={handleRefreshData}
+                      disabled={refreshing}
+                      className="ml-2 p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                      title="Actualizar datos"
+                    >
+                      {refreshing ? (
+                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
 
                   {employeeId && (
                     <div className="mt-2 flex items-center gap-2 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 px-3 py-2 rounded-lg">
@@ -342,6 +540,56 @@ export function UserAvatarMenu() {
                     </div>
                   )}
 
+                  {/* Información de base de datos */}
+                  {user.dbUser && (
+                    <div className="mt-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 p-3 rounded-lg">
+                      <h4 className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2">
+                        Información del Sistema
+                      </h4>
+                      <div className="space-y-2">
+                        {role && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-600 dark:text-gray-400">Rol:</span>
+                            <span className={`text-xs font-medium px-2 py-1 rounded ${getRoleColor()}`}>
+                              {role}
+                            </span>
+                          </div>
+                        )}
+
+                        {user.dbUser.campaign_id && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-600 dark:text-gray-400">Campaña ID:</span>
+                            <span className="text-xs font-medium text-gray-900 dark:text-gray-200">
+                              #{user.dbUser.campaign_id}
+                            </span>
+                          </div>
+                        )}
+
+                        {user.dbUser.document_type && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-600 dark:text-gray-400">Tipo Doc:</span>
+                            <span className="text-xs font-medium text-gray-900 dark:text-gray-200">
+                              {user.dbUser.document_type === 1 ? 'Cédula' :
+                               user.dbUser.document_type === 2 ? 'Pasaporte' :
+                               user.dbUser.document_type === 3 ? 'NIT' :
+                               'Tarjeta de Identidad'}
+                            </span>
+                          </div>
+                        )}
+
+                        {user.dbUser.bank_number && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-600 dark:text-gray-400">Banco:</span>
+                            <span className="text-xs font-medium text-gray-900 dark:text-gray-200">
+                              {user.dbUser.bank_number}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Información de AD */}
                   <div className="mt-3 space-y-1">
                     {department && (
                       <div className="flex items-center gap-2">
@@ -360,105 +608,17 @@ export function UserAvatarMenu() {
                         <span className="text-sm text-gray-600 dark:text-gray-300">{title}</span>
                       </div>
                     )}
-                  </div>
-                </div>
-              </div>
 
-              {/* NUEVO: Sección de estructura de OU */}
-              <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                    Estructura Organizativa
-                  </h4>
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-                
-                <div className="space-y-2">
-                  {/* Ruta completa */}
-                  <div className="flex items-start gap-2">
-                    <svg className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-600 dark:text-gray-300 truncate" title={ouDisplay}>
-                        {ouDisplay}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                        {ouStructure.fullPath.length} nivel{ouStructure.fullPath.length !== 1 ? 'es' : ''} organizativo{ouStructure.fullPath.length !== 1 ? 's' : ''}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Detalles específicos */}
-                  <div className="grid grid-cols-2 gap-2 mt-3">
-                    {ouStructure.colombia && (
-                      <div className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Colombia</p>
-                          <p className="text-sm text-gray-800 dark:text-gray-200 truncate">{ouStructure.colombia}</p>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {ouStructure.ti && (
-                      <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">TI</p>
-                          <p className="text-sm text-gray-800 dark:text-gray-200 truncate">{ouStructure.ti}</p>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {ouStructure.platform && (
-                      <div className="flex items-center gap-2 p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                        <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Plataforma</p>
-                          <p className="text-sm text-gray-800 dark:text-gray-200 truncate">{ouStructure.platform}</p>
-                        </div>
+                    {primaryOU && (
+                      <div className="flex items-center gap-2">
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                        </svg>
+                        <span className="text-sm text-gray-600 dark:text-gray-300">{primaryOU}</span>
                       </div>
                     )}
                   </div>
                 </div>
-                
-                {/* Indicador visual de la ruta */}
-                {ouStructure.fullPath.length > 0 && (
-                  <div className="mt-3">
-                    <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 mb-2">
-                      <span>Jerarquía:</span>
-                    </div>
-                    <div className="relative">
-                      <div className="absolute left-3 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-gray-700"></div>
-                      <div className="space-y-2">
-                        {ouStructure.fullPath.map((ou, index) => (
-                          <div key={index} className="flex items-center relative">
-                            <div className={`z-10 w-6 h-6 rounded-full flex items-center justify-center mr-3 
-                              ${index === 0 ? 'bg-blue-500' : 
-                                index === ouStructure.fullPath.length - 1 ? 'bg-green-500' : 
-                                'bg-gray-400'}`}>
-                              <span className="text-white text-xs font-bold">{index + 1}</span>
-                            </div>
-                            <div className={`flex-1 p-2 rounded-lg ${index === ouStructure.fullPath.length - 1 ? 
-                              'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 
-                              'bg-gray-50 dark:bg-gray-800'}`}>
-                              <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{ou}</p>
-                              {index === 0 && (
-                                <p className="text-xs text-gray-500 dark:text-gray-500">Nivel superior</p>
-                              )}
-                              {index === ouStructure.fullPath.length - 1 && (
-                                <p className="text-xs text-green-600 dark:text-green-400">Ubicación actual</p>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -490,7 +650,6 @@ export function UserAvatarMenu() {
                 Configuración
               </a>
 
-              {/* NUEVO: Enlace a información de OU */}
               <a
                 href="/organizacion"
                 className="flex items-center px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group"
@@ -507,32 +666,28 @@ export function UserAvatarMenu() {
 
             <div className="border-t border-gray-100 dark:border-gray-700" />
 
-            <button
-              onClick={handleSignOut}
-              className="flex items-center w-full px-4 py-3 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors group"
-            >
-              <div className="mr-3 p-2 rounded-lg bg-red-100 dark:bg-red-900/30 group-hover:bg-red-200 dark:group-hover:bg-red-900/50 transition-colors">
-                <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-              </div>
-              Cerrar sesión
-            </button>
-
-            {/* NUEVO: Footer con información de metadatos */}
-            <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
-              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                <span>Fuente: Active Directory</span>
-                {session.user?.adUser?._metadata?.timestamp && (
-                  <span title={session.user.adUser._metadata.timestamp}>
-                    {new Date(session.user.adUser._metadata.timestamp).toLocaleTimeString()}
-                  </span>
-                )}
-              </div>
+            <div className="flex items-center justify-between px-4 py-3">
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {user.syncData?.timestamp && 
+                  `Sincronizado: ${new Date(user.syncData.timestamp).toLocaleTimeString()}`
+                }
+              </span>
+              
+              <button
+                onClick={handleSignOut}
+                className="flex items-center px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors rounded-lg group"
+              >
+                <div className="mr-2 p-1 rounded-lg bg-red-100 dark:bg-red-900/30 group-hover:bg-red-200 dark:group-hover:bg-red-900/50 transition-colors">
+                  <svg className="w-3.5 h-3.5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </div>
+                Cerrar sesión
+              </button>
             </div>
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }

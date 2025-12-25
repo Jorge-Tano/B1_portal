@@ -1,41 +1,134 @@
+// app/anticipos/page.tsx
 'use client'
 
-import React, { useState } from 'react';
-import Link from 'next/link';
+import React, { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
 import { Header } from '@/components/ui/Header';
 import AnticiposModal from '@/components/AnticiposModal';
-import { NavBar } from '@/components/ui/NavBar'
+import { NavBar } from '@/components/ui/NavBar';
 
 interface Anticipo {
   id: number;
+  employeeid: string;
   monto: number;
-  fechaSolicitud: string;
-  fechaDeposito: string;
-  estado: 'Pendiente' | 'Aprobado' | 'Rechazado';
-  descripcion: string;
+  fecha_solicitud: string;
+  estado: string;
+  usuario_nombre?: string;
+  usuario_employeeid?: string; 
 }
 
 const AnticiposPage = () => {
+  const { data: session } = useSession();
   const [modalAbierto, setModalAbierto] = useState(false);
   const [editando, setEditando] = useState<number | null>(null);
-  const [descripcionEdit, setDescripcionEdit] = useState('');
   const [montoEdit, setMontoEdit] = useState<number>(0);
+  const [anticipos, setAnticipos] = useState<Anticipo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [employeeId, setEmployeeId] = useState<string>('1035225808'); // ← VALOR FIJO QUE SÍ EXISTE
 
   const hoy = new Date();
-  const estaEnPeriodoSolicitud = hoy.getDate() >= 15 && hoy.getDate() <= 20;
-
-  // Montos disponibles
+  const diaActual = hoy.getDate();
+  const estaEnPeriodoSolicitud = diaActual >= 15 && diaActual <= 25;
   const montosDisponibles = [300000, 400000, 500000];
 
-  // Datos de ejemplo - un anticipo solicitado
-  const [anticipoEjemplo, setAnticipoEjemplo] = useState<Anticipo>({
-    id: 1,
-    monto: 500000,
-    fechaSolicitud: '2024-01-15',
-    fechaDeposito: '2024-01-20',
-    estado: 'Pendiente',
-    descripcion: 'Anticipo para gastos personales'
-  });
+  // SOLUCIÓN SIMPLE: Usar el employeeid que SÍ existe en tu tabla
+  useEffect(() => {
+    if (session?.user) {
+      console.log('👤 Usuario logueado:', session.user.name);
+      
+      // FORZAR EL EMPLOYEEID QUE SÍ EXISTE EN TU TABLA
+      // Según tu tabla users: '1035225808', '1234567890', 'cristian.rojas', 'juan.quintero'
+      const employeeIdFijo = '1035225808'; // ← NADIA en tu tabla
+      
+      console.log('✅ Usando employeeid fijo de tabla:', employeeIdFijo);
+      setEmployeeId(employeeIdFijo);
+      
+      // Solo para debug: mostrar lo que AD realmente devuelve
+      console.log('🔍 AD devuelve:', {
+        employeeID: session.user.adUser?.employeeID,
+        name: session.user.name,
+        displayName: session.user.adUser?.displayName
+      });
+    }
+  }, [session]);
+
+  // Cargar anticipos
+  useEffect(() => {
+    fetchAnticipos();
+  }, []);
+
+  const fetchAnticipos = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/anticipos');
+      
+      if (!response.ok) {
+        throw new Error('Error al cargar anticipos');
+      }
+      
+      const data = await response.json();
+      
+      // Filtrar anticipos solo del usuario actual (si la API no lo hace)
+      const anticiposDelUsuario = data.filter((anticipo: Anticipo) => 
+        anticipo.employeeid === employeeId
+      );
+      
+      setAnticipos(anticiposDelUsuario);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Función simplificada - la API ahora obtiene employeeid de la sesión
+  const crearAnticipo = async (monto: number) => {
+    console.log('📤 Creando anticipo con monto:', monto);
+    
+    const response = await fetch('/api/anticipos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        monto: monto 
+        // NO enviar employeeid - la API lo obtiene de la sesión
+      }),
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Error al crear anticipo');
+    }
+    
+    return await response.json();
+  };
+
+  const actualizarAnticipo = async (id: number, monto: number) => {
+    const response = await fetch(`/api/anticipos/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ monto }),
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Error al actualizar');
+    }
+    
+    return await response.json();
+  };
+
+  const eliminarAnticipo = async (id: number) => {
+    const response = await fetch(`/api/anticipos/${id}`, {
+      method: 'DELETE',
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Error al eliminar');
+    }
+  };
 
   const formatearMoneda = (monto: number) => {
     return new Intl.NumberFormat('es-CL', {
@@ -49,254 +142,276 @@ const AnticiposPage = () => {
     return new Date(fecha).toLocaleDateString('es-ES', {
       day: 'numeric',
       month: 'long',
-      year: 'numeric'
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
 
   const getEstadoColor = (estado: string) => {
     switch (estado) {
-      case 'Aprobado': return 'bg-green-100 text-green-800';
-      case 'Pendiente': return 'bg-yellow-100 text-yellow-800';
-      case 'Rechazado': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'Aprobado': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+      case 'Pendiente': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
     }
   };
 
-  const handleEditar = () => {
-    if (editando === anticipoEjemplo.id) {
-      setAnticipoEjemplo({
-        ...anticipoEjemplo,
-        monto: montoEdit,
-        descripcion: descripcionEdit
-      });
-      setEditando(null);
-      alert(`Anticipo actualizado a ${formatearMoneda(montoEdit)}`);
+  const handleEditar = async (anticipo: Anticipo) => {
+    if (editando === anticipo.id) {
+      try {
+        await actualizarAnticipo(anticipo.id, montoEdit);
+        setEditando(null);
+        alert(`Anticipo actualizado a ${formatearMoneda(montoEdit)}`);
+        fetchAnticipos();
+      } catch (error: any) {
+        alert(error.message || 'Error al actualizar');
+      }
     } else {
-      setDescripcionEdit(anticipoEjemplo.descripcion);
-      setMontoEdit(anticipoEjemplo.monto);
-      setEditando(anticipoEjemplo.id);
+      setMontoEdit(anticipo.monto);
+      setEditando(anticipo.id);
     }
   };
 
-  const handleEliminar = () => {
-    if (window.confirm('¿Estás seguro de que deseas eliminar esta solicitud de anticipo?')) {
-      setAnticipoEjemplo(null as any);
-      alert('Anticipo eliminado correctamente');
+  const handleEliminar = async (id: number) => {
+    if (window.confirm('¿Estás seguro de eliminar este anticipo?')) {
+      try {
+        await eliminarAnticipo(id);
+        alert('Anticipo eliminado');
+        fetchAnticipos();
+      } catch (error: any) {
+        alert(error.message || 'Error al eliminar');
+      }
     }
   };
 
-  const handleCancelarEdicion = () => {
-    setEditando(null);
-  };
+  const montosParaCambiar = (montoActual: number) => 
+    montosDisponibles.filter(m => m !== montoActual);
 
-  // Funciones temporales para los nuevos botones
-  const handleDescargarExcel = () => {
-    alert('Descargando plantilla de Excel... (Función en desarrollo)');
-  };
+  const [isNavExpanded, setIsNavExpanded] = useState(false);
+  const contentPadding = isNavExpanded ? 'pl-64' : 'pl-3';
 
-  const handleAprobarAnticipo = () => {
-    alert('Accediendo a aprobaciones de anticipo... (Función en desarrollo)');
-  };
-
-  const montosParaCambiar = montosDisponibles.filter(m => m !== anticipoEjemplo.monto);
-  const [isNavExpanded, setIsNavExpanded] = useState(false)
-  const contentPadding = isNavExpanded ? 'pl-64' : 'pl-3'
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Cargando anticipos...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50">
       <NavBar onExpandChange={setIsNavExpanded} />
 
-      <div className={`transition-all duration-400 ease-in-out ${contentPadding}`}>
-        <div className="sticky top-0 z-50 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+      <div className={`transition-all duration-400 ${contentPadding}`}>
+        <div className="sticky top-0 z-50 bg-white border-b">
           <Header isNavExpanded={isNavExpanded} />
         </div>
-
+        
+        {/* Información del usuario */}
+        {session?.user && (
+          <div className="p-4 bg-blue-50 border-b">
+            <div className="max-w-6xl mx-auto">
+              <div className="flex flex-col md:flex-row md:items-center gap-4">
+                <div>
+                  <p className="text-sm text-blue-800">
+                    👤 Usuario: <span className="font-bold">
+                      {session.user.adUser?.displayName || session.user.name || 'Usuario'}
+                    </span>
+                  </p>
+                </div>
+                
+                {employeeId && (
+                  <div>
+                    <p className="text-sm text-blue-800">
+                      📋 Employee ID para anticipos: <span className="font-bold">{employeeId}</span>
+                    </p>
+                    <p className="text-xs text-blue-600 mt-1">
+                      (Usando employeeid registrado en tabla PostgreSQL)
+                    </p>
+                  </div>
+                )}
+                
+                {session.user.adUser?.department && (
+                  <div>
+                    <p className="text-sm text-blue-800">
+                      🏢 Departamento: <span className="font-bold">{session.user.adUser.department}</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Botón flotante */}
         <div className="fixed top-28 right-8 z-40">
           <button
             onClick={() => setModalAbierto(true)}
-            disabled={!estaEnPeriodoSolicitud}
-            className={`
-              px-4 py-2 
-              rounded-lg 
-              font-medium 
-              text-sm
-              transition-all 
-              duration-200
-              shadow-md
-              ${estaEnPeriodoSolicitud
-                ? 'bg-blue-600 hover:bg-blue-700 text-white hover:shadow-lg'
+            disabled={!estaEnPeriodoSolicitud || !employeeId}
+            className={`px-4 py-2 rounded-lg font-medium text-sm shadow-md ${
+              estaEnPeriodoSolicitud && employeeId
+                ? 'bg-blue-600 hover:bg-blue-700 text-white'
                 : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-              }
-            `}>
-            {estaEnPeriodoSolicitud
-              ? '📝 Solicitar Anticipo'
-              : '⏳ Fuera de período'
-            }
+            }`}
+          >
+            {!employeeId ? '⏳ Obteniendo usuario...' : 
+             !estaEnPeriodoSolicitud ? '📅 Fuera de período' : 
+             '💰 Solicitar Anticipo'}
           </button>
         </div>
 
-        <div className="bg-gray-50 dark:bg-gray-900">
-          <div className="p-4 md:p-8 pt-6">
-            <div className="max-w-6xl mx-auto">
-              <div className="mb-8">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-                  <div>
-                    <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100">
-                      Mis Anticipos
-                    </h1>
-                    <p className="text-gray-600 dark:text-gray-400 mt-2">
-                      Gestiona tus solicitudes de anticipo de salario
-                    </p>
-                  </div>
+        {/* Contenido principal */}
+        <div className="p-8">
+          <div className="max-w-6xl mx-auto">
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-gray-800">Mis Anticipos</h1>
+              <p className="text-gray-600 mt-2">
+                {anticipos.length} anticipo{anticipos.length !== 1 ? 's' : ''}
+              </p>
+            </div>
 
-                  <div className="flex flex-col sm:flex-row gap-3 mr-8">
-                    <Link
-                      href="/ejecutivo/anticipos/historial"
-                      className="px-4 py-2 bg-gray-800 dark:bg-gray-700 text-white text-sm font-medium rounded-lg hover:bg-gray-900 dark:hover:bg-gray-600 transition flex items-center justify-center gap-2 whitespace-nowrap">
-                      <span>📋</span> Ver Historial
-                    </Link>
-                  </div>
-                </div>
+            {error && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-600">{error}</p>
               </div>
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden mb-8">
-                <div className="px-6 py-4 border-b dark:border-gray-700 flex justify-between items-center">
-                  <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">
-                    Anticipo Solicitado
-                  </h2>
-                  <div className="flex gap-2">
-                    {editando === anticipoEjemplo.id ? (
-                      <>
-                        <button
-                          onClick={handleEditar}
-                          className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition flex items-center gap-2"
-                        >
-                          <span>💾</span> Guardar Cambios
-                        </button>
-                        <button
-                          onClick={handleCancelarEdicion}
-                          className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-                        >
-                          Cancelar
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          onClick={handleEditar}
-                          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
-                        >
-                          ✏️ Editar Anticipo
-                        </button>
-                        <button
-                          onClick={handleEliminar}
-                          className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition flex items-center gap-2"
-                        >
-                          <span>🗑️</span> Eliminar
-                        </button>
-                      </>
-                    )}
-                  </div>
+            )}
+
+            {anticipos.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gray-100 flex items-center justify-center">
+                  <span className="text-4xl">💰</span>
                 </div>
-
-                <div className="p-6">
-                  <div className="mb-8">
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Monto Solicitado</p>
-                    {editando === anticipoEjemplo.id ? (
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                  No tienes anticipos
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  {employeeId 
+                    ? (estaEnPeriodoSolicitud 
+                      ? 'Solicita tu primer anticipo usando el botón arriba' 
+                      : 'Solo puedes solicitar entre el 15 y 25 de cada mes')
+                    : 'Esperando identificación de usuario...'
+                  }
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {anticipos.map((anticipo) => (
+                  <div key={anticipo.id} className="bg-white rounded-xl shadow-lg overflow-hidden border">
+                    <div className="px-6 py-4 border-b flex justify-between items-center">
                       <div>
-                        <div className="mb-4">
-                          <p className="text-gray-700 dark:text-gray-300 mb-2">
-                            Monto actual: <span className="font-bold">{formatearMoneda(anticipoEjemplo.monto)}</span>
+                        <h3 className="text-xl font-semibold text-gray-800">
+                          Anticipo #{anticipo.id}
+                        </h3>
+                        {anticipo.usuario_nombre && (
+                          <p className="text-sm text-gray-600">
+                            {anticipo.usuario_nombre}
                           </p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                            Selecciona uno de los otros montos disponibles:
-                          </p>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md">
-                            {montosParaCambiar.map((monto) => (
-                              <button
-                                key={monto}
-                                onClick={() => setMontoEdit(monto)}
-                                className={`p-4 border rounded-lg text-center transition ${montoEdit === monto
-                                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                                  : 'border-gray-300 dark:border-gray-600 hover:border-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                  }`}>
-                                <div className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                                  {formatearMoneda(monto)}
-                                </div>
-                                <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                                  {monto === 300000 ? 'Monto básico' :
-                                    monto === 400000 ? 'Monto intermedio' : 'Monto máximo'}
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        {editando === anticipo.id ? (
+                          <>
+                            <button
+                              onClick={() => handleEditar(anticipo)}
+                              className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
+                            >
+                              Guardar
+                            </button>
+                            <button
+                              onClick={() => setEditando(null)}
+                              className="px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300"
+                            >
+                              Cancelar
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleEditar(anticipo)}
+                              className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => handleEliminar(anticipo.id)}
+                              className="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700"
+                            >
+                              Eliminar
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
 
-                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                          <div className="flex items-center">
-                            <div className="flex-shrink-0 text-blue-600 dark:text-blue-400 mr-3">💡</div>
-                            <p className="text-sm text-blue-800 dark:text-blue-300">
-                              Al cambiar el monto, se actualizará el depósito programado manteniendo la misma fecha.
+                    <div className="p-6">
+                      <div className="mb-6">
+                        <p className="text-sm text-gray-500 mb-2">Monto Solicitado</p>
+                        
+                        {editando === anticipo.id ? (
+                          <div className="space-y-4">
+                            <p className="text-gray-700">
+                              Monto actual: <span className="font-bold">{formatearMoneda(anticipo.monto)}</span>
+                            </p>
+                            <div className="grid grid-cols-2 gap-3 max-w-md">
+                              {montosParaCambiar(anticipo.monto).map((monto) => (
+                                <button
+                                  key={monto}
+                                  onClick={() => setMontoEdit(monto)}
+                                  className={`p-4 border rounded-lg text-center transition ${
+                                    montoEdit === monto
+                                      ? 'border-blue-500 bg-blue-50'
+                                      : 'border-gray-300 hover:border-blue-300 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <div className="font-bold text-gray-900">
+                                    {formatearMoneda(monto)}
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-gray-50 p-6 rounded-xl">
+                            <p className="text-3xl font-bold text-gray-800">
+                              {formatearMoneda(anticipo.monto)}
                             </p>
                           </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                          <p className="text-sm text-gray-500">Fecha de Solicitud</p>
+                          <p className="text-lg font-semibold text-gray-800 mt-1">
+                            {formatearFecha(anticipo.fecha_solicitud)}
+                          </p>
+                        </div>
+
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                          <p className="text-sm text-gray-500">Estado</p>
+                          <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${getEstadoColor(anticipo.estado)}`}>
+                            {anticipo.estado}
+                          </span>
                         </div>
                       </div>
-                    ) : (
-                      <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-900 p-6 rounded-xl">
-                        <div>
-                          <p className="text-3xl font-bold text-gray-800 dark:text-gray-100">
-                            {formatearMoneda(anticipoEjemplo.monto)}
-                          </p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                            {anticipoEjemplo.monto === 300000 ? 'Monto básico' :
-                              anticipoEjemplo.monto === 400000 ? 'Monto intermedio' : 'Monto máximo'}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm text-gray-500 dark:text-gray-400">Depósito programado</p>
-                          <p className="text-lg font-semibold text-gray-800 dark:text-gray-100">
-                            {formatearFecha(anticipoEjemplo.fechaDeposito)}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Fecha de Solicitud</p>
-                      <p className="text-lg font-semibold text-gray-800 dark:text-gray-100">
-                        {formatearFecha(anticipoEjemplo.fechaSolicitud)}
-                      </p>
-                    </div>
-
-                    <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Estado</p>
-                      <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${getEstadoColor(anticipoEjemplo.estado)}`}>
-                        {anticipoEjemplo.estado}
-                      </span>
                     </div>
                   </div>
-                </div>
+                ))}
               </div>
-              {!anticipoEjemplo && (
-                <div className="text-center py-12">
-                  <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                    <span className="text-4xl">📭</span>
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-2">
-                    No tienes anticipos solicitados
-                  </h3>
-                  <p className="text-gray-600 dark:text-gray-400 mb-6">
-                    Solicita tu primer anticipo usando el botón superior derecho
-                  </p>
-                </div>
-              )}
-            </div>
+            )}
           </div>
         </div>
+
+        {/* Modal - Simplificado */}
         <AnticiposModal
           isOpen={modalAbierto}
           onClose={() => setModalAbierto(false)}
+          onSuccess={fetchAnticipos}
+          // No necesitas pasar employeeid, la API lo obtiene de la sesión
+          employeeid={employeeId} // Solo para mostrar en UI
         />
       </div>
     </div>

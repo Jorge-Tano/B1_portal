@@ -9,7 +9,7 @@ export default function Dashboard() {
   const contentPadding = isNavExpanded ? 'pl-64' : 'pl-3'
 
   const gridItems = [
-    { title: "Anticipos", href: "/ejecutivo/ejecutivo/anticipos" },
+    { title: "Anticipos", href: "/ejecutivo/anticipos" },
   ]
 
   return (

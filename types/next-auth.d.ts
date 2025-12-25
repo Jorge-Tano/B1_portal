@@ -9,11 +9,11 @@ declare module "next-auth" {
       name?: string | null;
       email?: string | null;
       image?: string | null;
+      employeeID?: string;
       adUser?: ADUserData;
       ou?: string;
       allOUs?: string[];
-      employeeID?: string;
-      // NUEVO: Estructura de OU
+      // Estructura de OU
       ouStructure?: {
         colombia?: string;
         ti?: string;
@@ -21,6 +21,20 @@ declare module "next-auth" {
         fullPath?: string[];
         isInTI?: boolean;
         isInColombia?: boolean;
+      };
+      // Datos de sincronización
+      syncData?: {
+        dbUserId?: number;
+        action?: 'created' | 'updated' | 'skipped';
+        timestamp?: string;
+      };
+      // Datos de la base de datos
+      dbUser?: {
+        id: number;
+        employeeID: string;
+        name: string;
+        campaign_id?: number;
+        role?: string;
       };
     } & DefaultSession["user"];
   }
@@ -30,11 +44,11 @@ declare module "next-auth" {
     name?: string | null;
     email?: string | null;
     image?: string | null;
+    employeeID?: string;
     adUser?: ADUserData;
     ou?: string;
     allOUs?: string[];
-    employeeID?: string;
-    // NUEVO: Estructura de OU
+    // Estructura de OU
     ouStructure?: {
       colombia?: string;
       ti?: string;
@@ -43,17 +57,23 @@ declare module "next-auth" {
       isInTI?: boolean;
       isInColombia?: boolean;
     };
+    // Datos de sincronización
+    syncData?: {
+      dbUserId?: number;
+      action?: 'created' | 'updated' | 'skipped';
+      timestamp?: string;
+    };
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
     id: string;
+    employeeID?: string;
     adUser?: ADUserData;
     ou?: string;
     allOUs?: string[];
-    employeeID?: string;
-    // NUEVO: Estructura de OU
+    // Estructura de OU
     ouStructure?: {
       colombia?: string;
       ti?: string;
@@ -61,6 +81,20 @@ declare module "next-auth/jwt" {
       fullPath?: string[];
       isInTI?: boolean;
       isInColombia?: boolean;
+    };
+    // Datos de sincronización
+    syncData?: {
+      dbUserId?: number;
+      action?: 'created' | 'updated' | 'skipped';
+      timestamp?: string;
+    };
+    // Datos de la base de datos
+    dbUser?: {
+      id: number;
+      employeeID: string;
+      name: string;
+      campaign_id?: number;
+      role?: string;
     };
   }
 }

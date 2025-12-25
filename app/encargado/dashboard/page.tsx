@@ -102,7 +102,7 @@ export default function Dashboard() {
               <div className="md:col-span-2 lg:col-span-3 bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-900/20 dark:to-indigo-900/20 rounded-2xl p-8 border border-violet-100 dark:border-violet-800/30">
                 <div className="flex items-start">
                   <div className="flex-shrink-0">
-                    <div className="w-40 h-40 rounded-xl bg-gradient-to-r from-violet-100 to-indigo-100 dark:from-violet-900/40 dark:to-indigo-900/40 flex items-center justify-center p-4">
+                    <div className="w-40 h-40 rounded-xl bg-gradient-to-r from-gray-2 00 to-gray-100 dark:from-gray-100/40 dark:to-gray-100/40 flex items-center justify-center p-4">
                       <img src="/gato.png" alt="" />
                     </div>
                   </div>
