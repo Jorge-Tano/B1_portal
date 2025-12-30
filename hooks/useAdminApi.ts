@@ -1,17 +1,31 @@
 import { useState, useCallback } from 'react'
-import { Campaign, UserRole, CampaignFormData, UserFormData } from '@/types/admin'
+import {
+  Campaign,
+  UserRole,
+  CampaignFormData,
+  UserFormData,
+  DocumentType,
+  BankAccountType,
+  AmountConfig,
+  AmountConfigFormData
+} from '@/types/admin'
 
 export function useAdminApi() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [userRoles, setUserRoles] = useState<UserRole[]>([])
+  const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([])
+  const [bankAccountTypes, setBankAccountTypes] = useState<BankAccountType[]>([])
+  const [amountConfigs, setAmountConfigs] = useState<AmountConfig[]>([])
   const [loading, setLoading] = useState({
     campaigns: true,
-    users: true
+    users: true,
+    documentTypes: true,
+    bankAccountTypes: true,
+    amounts: true
   })
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
-  // Función para mostrar mensajes temporales
   const showMessage = useCallback((message: string, type: 'success' | 'error') => {
     if (type === 'success') {
       setSuccessMessage(message)
@@ -27,69 +41,29 @@ export function useAdminApi() {
     }, 5000)
   }, [])
 
-  // Función para obtener campañas
+  // ==================== CAMPAÑAS ====================
+
   const fetchCampaigns = useCallback(async () => {
     try {
       setLoading(prev => ({ ...prev, campaigns: true }))
-      
-      // Usar ruta absoluta directamente
-      const response = await fetch('/admin/api/campaings', {
-        headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store'
-      })
+      const response = await fetch('/admin/api/campaigns')
 
       if (!response.ok) {
-        let errorMessage = `Error ${response.status}`
-        try {
-          const errorData = await response.json()
-          errorMessage = errorData.message || errorData.error || errorMessage
-        } catch (e) {}
-        throw new Error(errorMessage)
+        throw new Error(`Error ${response.status}`)
       }
 
       const data = await response.json()
       setCampaigns(data)
     } catch (error: any) {
-      console.error('Error en fetchCampaigns:', error)
-      showMessage(error.message || 'Error al cargar las campañas', 'error')
+      showMessage('Error al cargar las campañas', 'error')
     } finally {
       setLoading(prev => ({ ...prev, campaigns: false }))
     }
   }, [showMessage])
 
-  // Función para obtener usuarios
-  const fetchUsers = useCallback(async () => {
-    try {
-      setLoading(prev => ({ ...prev, users: true }))
-      
-      // Usar ruta absoluta directamente
-      const response = await fetch('/admin/api/users', {
-        headers: { 'Content-Type': 'application/json' }
-      })
-
-      if (!response.ok) {
-        let errorMessage = `Error ${response.status}`
-        try {
-          const errorData = await response.json()
-          errorMessage = errorData.message || errorData.error || errorMessage
-        } catch (e) {}
-        throw new Error(errorMessage)
-      }
-
-      const data = await response.json()
-      setUserRoles(data)
-    } catch (error: any) {
-      console.error('Error en fetchUsers:', error)
-      showMessage(error.message || 'Error al cargar los usuarios', 'error')
-    } finally {
-      setLoading(prev => ({ ...prev, users: false }))
-    }
-  }, [showMessage])
-
-  // Función para crear una campaña
   const createCampaign = useCallback(async (formData: CampaignFormData) => {
     try {
-      const response = await fetch('/admin/api/campaings', {
+      const response = await fetch('/admin/api/campaigns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -99,8 +73,7 @@ export function useAdminApi() {
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || `Error ${response.status} al crear campaña`)
+        throw new Error(`Error ${response.status}`)
       }
 
       const newCampaign = await response.json()
@@ -108,16 +81,14 @@ export function useAdminApi() {
       showMessage('Campaña creada exitosamente', 'success')
       return newCampaign
     } catch (error: any) {
-      console.error('Error creating campaign:', error)
-      showMessage(error.message || 'Error al crear la campaña', 'error')
+      showMessage('Error al crear la campaña', 'error')
       throw error
     }
   }, [showMessage])
 
-  // Función para actualizar una campaña
   const updateCampaign = useCallback(async (id: number, formData: CampaignFormData) => {
     try {
-      const response = await fetch(`/admin/api/campaings/${id}`, {
+      const response = await fetch(`/admin/api/campaigns?id=${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -127,137 +98,245 @@ export function useAdminApi() {
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || `Error ${response.status} al actualizar campaña`)
+        throw new Error(`Error ${response.status}`)
       }
 
       const updatedCampaign = await response.json()
       setCampaigns(prev =>
-        prev.map(campaign => campaign.id === id ? updatedCampaign : campaign)
+        prev.map(campaign =>
+          campaign.id === id ? updatedCampaign : campaign
+        )
       )
       showMessage('Campaña actualizada exitosamente', 'success')
       return updatedCampaign
     } catch (error: any) {
-      console.error('Error updating campaign:', error)
-      showMessage(error.message || 'Error al actualizar la campaña', 'error')
+      showMessage('Error al actualizar la campaña', 'error')
       throw error
     }
   }, [showMessage])
 
-  // Función para eliminar una campaña
   const deleteCampaign = useCallback(async (id: number) => {
     try {
-      const response = await fetch(`/admin/api/campaings/${id}`, {
+      const response = await fetch(`/admin/api/campaigns?id=${id}`, {
         method: 'DELETE',
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || `Error ${response.status} al eliminar campaña`)
+        throw new Error(`Error ${response.status}`)
       }
 
       setCampaigns(prev => prev.filter(campaign => campaign.id !== id))
       showMessage('Campaña eliminada exitosamente', 'success')
     } catch (error: any) {
-      console.error('Error deleting campaign:', error)
-      showMessage(error.message || 'Error al eliminar la campaña', 'error')
+      showMessage('Error al eliminar la campaña', 'error')
       throw error
     }
   }, [showMessage])
 
-  // Función para crear un usuario
-  const createUser = useCallback(async (formData: UserFormData) => {
+  // ==================== USUARIOS ====================
+
+  const fetchUsers = useCallback(async (userId?: number) => {
     try {
-      const response = await fetch('/admin/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          employeeid: formData.employeeid,
-          name: formData.name,
-          email: formData.email,
-          role: formData.role,
-          campaign_id: formData.campaign_id ? parseInt(formData.campaign_id) : null,
-          bank_account: formData.bank_account,
-          document_type: formData.document_type ? parseInt(formData.document_type) : null,
-          bank_number: formData.bank_number ? parseInt(formData.bank_number) : null,
-          telephone: formData.telephone,
-          mobile: formData.mobile,
-          ou: formData.ou
-        })
-      })
+      setLoading(prev => ({ ...prev, users: true }))
+      const url = userId ? `/admin/api/users?id=${userId}` : '/admin/api/users'
+      const response = await fetch(url)
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || `Error ${response.status} al crear usuario`)
+        throw new Error(`Error ${response.status}`)
       }
 
-      const newUser = await response.json()
-      setUserRoles(prev => [...prev, newUser])
-      showMessage('Usuario creado exitosamente', 'success')
-      return newUser
+      const data = await response.json()
+
+      if (userId) {
+        return data
+      }
+
+      setUserRoles(data)
+      return data
     } catch (error: any) {
-      console.error('Error creating user:', error)
-      showMessage(error.message || 'Error al crear el usuario', 'error')
+      showMessage('Error al cargar los usuarios', 'error')
       throw error
+    } finally {
+      setLoading(prev => ({ ...prev, users: false }))
     }
   }, [showMessage])
 
-  // Función para actualizar un usuario
-  const updateUser = useCallback(async (id: number, formData: UserFormData) => {
+  // ==================== TIPOS DE DOCUMENTO ====================
+
+  const fetchDocumentTypes = useCallback(async () => {
     try {
-      const response = await fetch(`/admin/api/users/${id}`, {
+      setLoading(prev => ({ ...prev, documentTypes: true }))
+      const response = await fetch('/admin/api/document-types')
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}`)
+      }
+
+      const data = await response.json()
+      setDocumentTypes(data)
+      return data
+    } catch (error: any) {
+      showMessage('Error al cargar tipos de documento', 'error')
+      throw error
+    } finally {
+      setLoading(prev => ({ ...prev, documentTypes: false }))
+    }
+  }, [showMessage])
+
+  // ==================== TIPOS DE CUENTAS BANCARIAS ====================
+
+  const fetchBankAccountTypes = useCallback(async () => {
+    try {
+      setLoading(prev => ({ ...prev, bankAccountTypes: true }))
+      const response = await fetch('/admin/api/bank-account-types')
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}`)
+      }
+
+      const data = await response.json()
+      setBankAccountTypes(data)
+      return data
+    } catch (error: any) {
+      showMessage('Error al cargar tipos de cuentas bancarias', 'error')
+      throw error
+    } finally {
+      setLoading(prev => ({ ...prev, bankAccountTypes: false }))
+    }
+  }, [showMessage])
+
+  // ==================== ACTUALIZAR USUARIO ====================
+  const updateUser = useCallback(async (id: number, formData: Partial<UserFormData>) => {
+    try {
+      const requestBody = {
+        employeeid: formData.employeeid ? String(formData.employeeid).trim() : undefined,
+        name: formData.name ? String(formData.name).trim() : undefined,
+        email: formData.email ? String(formData.email).trim() : null,
+        role: formData.role,
+        campaign_id: formData.campaign_id ? parseInt(String(formData.campaign_id)) : null,
+        bank_account: formData.bank_account ? String(formData.bank_account).trim() : null,
+        document_type: formData.document_type ? parseInt(String(formData.document_type)) : null,
+        bank_number: formData.bank_number ? parseInt(String(formData.bank_number)) : null,
+        telephone: formData.telephone ? String(formData.telephone).trim() : null,
+        mobile: formData.mobile ? String(formData.mobile).trim() : null,
+        ou: formData.ou ? String(formData.ou).trim() : null
+      }
+
+      const response = await fetch(`/admin/api/users?id=${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          employeeid: formData.employeeid,
-          name: formData.name,
-          email: formData.email,
-          role: formData.role,
-          campaign_id: formData.campaign_id ? parseInt(formData.campaign_id) : null,
-          bank_account: formData.bank_account,
-          document_type: formData.document_type ? parseInt(formData.document_type) : null,
-          bank_number: formData.bank_number ? parseInt(formData.bank_number) : null,
-          telephone: formData.telephone,
-          mobile: formData.mobile,
-          ou: formData.ou
-        })
+        body: JSON.stringify(requestBody)
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || `Error ${response.status} al actualizar usuario`)
+        throw new Error(`Error ${response.status}`)
       }
 
       const updatedUser = await response.json()
       setUserRoles(prev =>
-        prev.map(user => user.id === id ? updatedUser : user)
+        prev.map(user =>
+          user.id === id ? { ...user, ...updatedUser } : user
+        )
       )
       showMessage('Usuario actualizado exitosamente', 'success')
       return updatedUser
     } catch (error: any) {
-      console.error('Error updating user:', error)
-      showMessage(error.message || 'Error al actualizar el usuario', 'error')
+      showMessage('Error al actualizar el usuario', 'error')
       throw error
     }
   }, [showMessage])
 
-  // Función para eliminar un usuario
+  // ==================== ELIMINAR USUARIO ====================
   const deleteUser = useCallback(async (id: number) => {
     try {
-      const response = await fetch(`/admin/api/users/${id}`, {
+      const response = await fetch(`/admin/api/users?id=${id}`, {
         method: 'DELETE',
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || `Error ${response.status} al eliminar usuario`)
+        throw new Error(`Error ${response.status}`)
       }
 
       setUserRoles(prev => prev.filter(user => user.id !== id))
       showMessage('Usuario eliminado exitosamente', 'success')
     } catch (error: any) {
-      console.error('Error deleting user:', error)
-      showMessage(error.message || 'Error al eliminar el usuario', 'error')
+      showMessage('Error al eliminar el usuario', 'error')
+      throw error
+    }
+  }, [showMessage])
+
+  // ==================== MONTOS ====================
+
+  const fetchAmountConfigs = useCallback(async () => {
+    try {
+      setLoading(prev => ({ ...prev, amounts: true }))
+      const response = await fetch('/admin/api/amount-configs')
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}`)
+      }
+
+      const data = await response.json()
+      setAmountConfigs(data)
+      return data
+    } catch (error: any) {
+      showMessage('Error al cargar montos configurados', 'error')
+      throw error
+    } finally {
+      setLoading(prev => ({ ...prev, amounts: false }))
+    }
+  }, [showMessage])
+
+  const createAmountConfig = useCallback(async (formData: AmountConfigFormData) => {
+    try {
+      const response = await fetch('/admin/api/amount-configs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: parseInt(formData.amount),
+          description: formData.description || null
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}`)
+      }
+
+      const newAmount = await response.json()
+      setAmountConfigs(prev => [...prev, newAmount])
+      showMessage('Monto creado exitosamente', 'success')
+      return newAmount
+    } catch (error: any) {
+      showMessage('Error al crear el monto', 'error')
+      throw error
+    }
+  }, [showMessage])
+
+  const updateAmountConfig = useCallback(async (id: number, formData: AmountConfigFormData) => {
+    try {
+      const response = await fetch(`/admin/api/amount-configs?id=${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: parseInt(formData.amount),
+          description: formData.description || null
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}`)
+      }
+
+      const updatedAmount = await response.json()
+      setAmountConfigs(prev =>
+        prev.map(amount =>
+          amount.id === id ? updatedAmount : amount
+        )
+      )
+      showMessage('Monto actualizado exitosamente', 'success')
+      return updatedAmount
+    } catch (error: any) {
+      showMessage('Error al actualizar el monto', 'error')
       throw error
     }
   }, [showMessage])
@@ -265,17 +344,24 @@ export function useAdminApi() {
   return {
     campaigns,
     userRoles,
+    documentTypes,
+    bankAccountTypes,
+    amountConfigs,
     loading,
     error,
     successMessage,
     showMessage,
     fetchCampaigns,
     fetchUsers,
+    fetchDocumentTypes,
+    fetchBankAccountTypes,
+    fetchAmountConfigs,
     createCampaign,
     updateCampaign,
     deleteCampaign,
-    createUser,
     updateUser,
-    deleteUser
+    deleteUser,
+    createAmountConfig,
+    updateAmountConfig
   }
 }

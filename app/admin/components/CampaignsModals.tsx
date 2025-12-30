@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Campaign, CampaignFormData, UserRole } from '@/types/admin'
+import { Campaign, CampaignFormData } from '@/types/admin'
 
 interface CampaignModalProps {
   isEdit: boolean
   formData: CampaignFormData
   editingCampaign: Campaign | null
-  users: UserRole[]
   onClose: () => void
   onSubmit: (e: React.FormEvent) => Promise<void>
   onChange: (data: CampaignFormData) => void
@@ -21,7 +20,7 @@ interface DeleteModalProps {
 export function CampaignModal({
   isEdit,
   formData,
-  users,
+  editingCampaign,
   onClose,
   onSubmit,
   onChange
@@ -32,9 +31,10 @@ export function CampaignModal({
     setIsVisible(true)
   }, [])
 
-  const supervisors = users.filter(user => 
-    user.role?.toLowerCase() === 'supervisor'
-  )
+  const MODAL_CONFIG = {
+    title: isEdit ? 'Editar Campaña' : 'Nueva Campaña',
+    submitText: isEdit ? 'Actualizar' : 'Crear'
+  } as const
 
   const handleClose = () => {
     setIsVisible(false)
@@ -56,7 +56,7 @@ export function CampaignModal({
         }`}
       >
         <ModalHeader 
-          title={isEdit ? 'Editar Campaña' : 'Nueva Campaña'}
+          title={MODAL_CONFIG.title}
           onClose={handleClose}
         />
 
@@ -70,18 +70,19 @@ export function CampaignModal({
               autoFocus={true}
             />
 
-            {isEdit && (
-              <DirectorSelect
-                value={formData.principal_id || ''}
-                onChange={(value) => onChange({ ...formData, principal_id: value })}
-                supervisors={supervisors}
-              />
-            )}
+            <FormField
+              label="ID Principal (opcional)"
+              type="number"
+              value={formData.principal_id}
+              onChange={(value) => onChange({ ...formData, principal_id: value })}
+              required={false}
+              placeholder="Ej: 123"
+            />
           </div>
 
           <ModalFooter
             onClose={handleClose}
-            submitText={isEdit ? 'Actualizar' : 'Crear'}
+            submitText={MODAL_CONFIG.submitText}
           />
         </form>
       </div>
@@ -227,42 +228,6 @@ const FormField = ({
       placeholder={placeholder}
       autoFocus={autoFocus}
     />
-  </div>
-)
-
-const DirectorSelect = ({
-  value,
-  onChange,
-  supervisors
-}: {
-  value: string
-  onChange: (value: string) => void
-  supervisors: UserRole[]
-}) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-      Director
-    </label>
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
-                bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 
-                focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent
-                transition-all duration-200"
-    >
-      <option value="">Sin director asignado</option>
-      {supervisors.map((supervisor) => (
-        <option key={supervisor.id} value={supervisor.id.toString()}>
-          {supervisor.name} ({supervisor.employeeid})
-        </option>
-      ))}
-    </select>
-    {supervisors.length === 0 && (
-      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-        No hay supervisores disponibles. Asigna el rol de "supervisor" a un usuario primero.
-      </p>
-    )}
   </div>
 )
 

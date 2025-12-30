@@ -1,3 +1,14 @@
+export interface DocumentType {
+  id: number
+  name: string
+}
+
+export interface BankAccountType {
+  id: number
+  code: string
+  name: string
+}
+
 export interface UserRole {
   id: number
   employeeid: string
@@ -22,6 +33,7 @@ export interface Campaign {
 export interface AmountConfig {
   id: number
   amount: number
+  created_at?: string
 }
 
 export interface Recipient {
@@ -30,8 +42,6 @@ export interface Recipient {
   email: string
   department: string
 }
-
-export type ModalType = 'createCampaign' | 'editCampaign' | 'createUser' | 'editUser' | null
 
 export interface CampaignFormData {
   name: string
@@ -51,3 +61,5 @@ export interface UserFormData {
   mobile: string
   ou: string
 }
+
+export type ModalType = 'createCampaign' | 'editCampaign' | 'createUser' | 'editUser' | null

@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@tanstack/react-table": "^8.21.3",
     "dotenv": "^17.2.3",
     "ldapjs": "^3.0.7",
     "ldapts": "^8.0.27",
@@ -19,7 +20,8 @@
     "pg": "^8.16.3",
     "pool": "^0.4.1",
     "react": "19.2.1",
-    "react-dom": "19.2.1"
+    "react-dom": "19.2.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
