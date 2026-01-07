@@ -41,7 +41,6 @@ export function useAdminApi() {
     }, 5000)
   }, [])
 
-  // ==================== CAMPAÑAS ====================
 
   const fetchCampaigns = useCallback(async () => {
     try {
@@ -133,7 +132,6 @@ export function useAdminApi() {
     }
   }, [showMessage])
 
-  // ==================== USUARIOS ====================
 
   const fetchUsers = useCallback(async (userId?: number) => {
     try {
@@ -161,7 +159,6 @@ export function useAdminApi() {
     }
   }, [showMessage])
 
-  // ==================== TIPOS DE DOCUMENTO ====================
 
   const fetchDocumentTypes = useCallback(async () => {
     try {
@@ -183,8 +180,6 @@ export function useAdminApi() {
     }
   }, [showMessage])
 
-  // ==================== TIPOS DE CUENTAS BANCARIAS ====================
-
   const fetchBankAccountTypes = useCallback(async () => {
     try {
       setLoading(prev => ({ ...prev, bankAccountTypes: true }))
@@ -205,7 +200,6 @@ export function useAdminApi() {
     }
   }, [showMessage])
 
-  // ==================== ACTUALIZAR USUARIO ====================
   const updateUser = useCallback(async (id: number, formData: Partial<UserFormData>) => {
     try {
       const requestBody = {
@@ -246,7 +240,6 @@ export function useAdminApi() {
     }
   }, [showMessage])
 
-  // ==================== ELIMINAR USUARIO ====================
   const deleteUser = useCallback(async (id: number) => {
     try {
       const response = await fetch(`/admin/api/users?id=${id}`, {
@@ -264,8 +257,6 @@ export function useAdminApi() {
       throw error
     }
   }, [showMessage])
-
-  // ==================== MONTOS ====================
 
   const fetchAmountConfigs = useCallback(async () => {
     try {

@@ -13,7 +13,6 @@ declare module "next-auth" {
       adUser?: ADUserData;
       ou?: string;
       allOUs?: string[];
-      // Estructura de OU
       ouStructure?: {
         colombia?: string;
         ti?: string;
@@ -22,13 +21,11 @@ declare module "next-auth" {
         isInTI?: boolean;
         isInColombia?: boolean;
       };
-      // Datos de sincronización
       syncData?: {
         dbUserId?: number;
         action?: 'created' | 'updated' | 'skipped';
         timestamp?: string;
       };
-      // Datos de la base de datos
       dbUser?: {
         id: number;
         employeeID: string;
@@ -48,7 +45,6 @@ declare module "next-auth" {
     adUser?: ADUserData;
     ou?: string;
     allOUs?: string[];
-    // Estructura de OU
     ouStructure?: {
       colombia?: string;
       ti?: string;
@@ -57,7 +53,6 @@ declare module "next-auth" {
       isInTI?: boolean;
       isInColombia?: boolean;
     };
-    // Datos de sincronización
     syncData?: {
       dbUserId?: number;
       action?: 'created' | 'updated' | 'skipped';
@@ -73,7 +68,6 @@ declare module "next-auth/jwt" {
     adUser?: ADUserData;
     ou?: string;
     allOUs?: string[];
-    // Estructura de OU
     ouStructure?: {
       colombia?: string;
       ti?: string;
@@ -82,13 +76,11 @@ declare module "next-auth/jwt" {
       isInTI?: boolean;
       isInColombia?: boolean;
     };
-    // Datos de sincronización
     syncData?: {
       dbUserId?: number;
       action?: 'created' | 'updated' | 'skipped';
       timestamp?: string;
     };
-    // Datos de la base de datos
     dbUser?: {
       id: number;
       employeeID: string;

@@ -4,7 +4,6 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { LdapClient } from "@/lib/ldap-client";
 import { UserSyncService, SyncResult } from "@/lib/user-sync";
 
-// Cargar OUs permitidas desde variables de entorno
 const ALLOWED_OUS = process.env.ALLOWED_OUS
   ? process.env.ALLOWED_OUS.split(',').map(ou => ou.trim().toLowerCase()).filter(ou => ou.length > 0)
   : ['colombia'];
@@ -13,7 +12,6 @@ const BLOCKED_OUS = process.env.BLOCKED_OUS
   ? process.env.BLOCKED_OUS.split(',').map(ou => ou.trim().toLowerCase()).filter(ou => ou.length > 0)
   : [];
 
-// Función para extraer OU del DN
 function extractOUFromDN(dn: string): string | null {
   if (!dn) return null;
 
@@ -32,7 +30,6 @@ function extractOUFromDN(dn: string): string | null {
   }
 }
 
-// Función para extraer todas las OUs
 function extractAllOUsFromDN(dn: string): string[] {
   if (!dn) return [];
 
@@ -52,7 +49,6 @@ function extractAllOUsFromDN(dn: string): string[] {
   }
 }
 
-// Función de validación de OU
 function validateUserOUAccess(userOU: string | null, userAllOUs: string[]): {
   allowed: boolean;
   message?: string;
@@ -74,7 +70,6 @@ function validateUserOUAccess(userOU: string | null, userAllOUs: string[]): {
     };
   }
 
-  // Verificar si está bloqueada
   const isBlocked = BLOCKED_OUS.some(blockedOU =>
     userAllOUsLower.includes(blockedOU) || userOULower === blockedOU
   );
@@ -86,7 +81,6 @@ function validateUserOUAccess(userOU: string | null, userAllOUs: string[]): {
     };
   }
 
-  // Verificar si está permitida
   const isAllowed = ALLOWED_OUS.some(allowedOU =>
     userAllOUsLower.includes(allowedOU) || userOULower === allowedOU
   );
@@ -121,14 +115,12 @@ export const authOptions: NextAuthOptions = {
           const ldapClient = new LdapClient();
           const username = credentials.username.trim();
 
-          // 1. Autenticar usuario
           const authResult = await ldapClient.authenticateUser(username, credentials.password);
 
           if (!authResult.authenticated) {
             throw new Error(authResult.message || 'Credenciales incorrectas');
           }
 
-          // 2. Obtener datos del usuario
           const userDataResult = await ldapClient.getUserDetails(username);
 
           if (!userDataResult.success || !userDataResult.data) {
@@ -137,28 +129,23 @@ export const authOptions: NextAuthOptions = {
 
           const userData = userDataResult.data;
 
-          // 3. Extraer información de OU
           const dn = userData.distinguishedName || '';
           const userOU = extractOUFromDN(dn);
           const userAllOUs = extractAllOUsFromDN(dn);
 
-          // 4. Validar acceso según OU
           const ouValidation = validateUserOUAccess(userOU, userAllOUs);
 
           if (!ouValidation.allowed) {
             throw new Error(ouValidation.message || 'Acceso denegado');
           }
 
-          // 5. Sincronizar con base de datos
           let syncResult: SyncResult = { success: false, message: 'No sincronizado' };
 
           try {
             syncResult = await UserSyncService.syncUserFromAD(userData);
           } catch {
-            // Ignorar errores de sincronización, no deben bloquear el login
           }
 
-          // 6. Crear objeto de usuario para NextAuth
           const authUser = {
             id: userData.sAMAccountName || username,
             name: userData.displayName || username,
@@ -185,10 +172,8 @@ export const authOptions: NextAuthOptions = {
 
   callbacks: {
     async jwt({ token, user, trigger, session }) {
-      // Inicializar arrays si no existen
       token.allOUs = token.allOUs || [];
 
-      // Cuando el usuario inicia sesión por primera vez
       if (user) {
         token.id = user.id;
         token.name = user.name;
@@ -199,7 +184,6 @@ export const authOptions: NextAuthOptions = {
         token.adUser = (user as any).adUser;
         token.syncData = (user as any).syncData;
 
-        // Si ya tenemos data de sync, asignar dbUser inmediatamente
         if ((user as any).syncData?.dbUserId) {
           try {
             const dbUser = await UserSyncService.getUserById((user as any).syncData.dbUserId);
@@ -210,7 +194,6 @@ export const authOptions: NextAuthOptions = {
         }
       }
 
-      // Solo verificar en BD si no tenemos dbUser o si la sesión fue actualizada
       if (token.id && !token.dbUser) {
         try {
           const syncResult = await UserSyncService.verifyAndSyncUserSession(token.id);
@@ -218,11 +201,9 @@ export const authOptions: NextAuthOptions = {
             token.dbUser = syncResult.user;
           }
         } catch (error) {
-          // Silenciar error
         }
       }
 
-      // Permitir actualización manual de la sesión
       if (trigger === "update" && session?.dbUser) {
         token.dbUser = session.dbUser;
       }

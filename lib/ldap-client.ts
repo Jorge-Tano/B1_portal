@@ -218,7 +218,6 @@ export class LdapClient {
                     });
 
                     res.on('error', () => {
-                        // Error ya manejado por el evento 'end'
                     });
 
                     res.on('end', () => {

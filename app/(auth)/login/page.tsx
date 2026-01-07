@@ -18,7 +18,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    
+
     try {
       const result = await signIn('credentials', {
         username: username.trim(),
@@ -29,7 +29,7 @@ export default function LoginPage() {
       if (result?.error) {
         setError('Usuario o contraseña incorrectos');
       } else {
-        router.push('/ejecutivo/dashboard');
+        router.push('/dashboard');
         router.refresh();
       }
     } catch (err) {
@@ -50,10 +50,16 @@ export default function LoginPage() {
       <div className="w-[50%]">
         <div className="min-h-screen bg-white flex items-center justify-center">
           <div className="w-full max-w-lg p-8 bg-white rounded-3xl shadow-2xl">
-            <div className="flex justify-center mb-10">
-              <div className="w-28 h-28 bg-gradient-to-r from-[#4279ED] to-[#c52f30] rounded-3xl flex items-center justify-center shadow-xl">
-                <div className="text-center">
-                  <div className="text-black font-bold text-5xl leading-none">B1P</div>
+            <div className="flex justify-center mt-5">
+              <div className="w-40 h-40 rounded-3xl flex items-center justify-center">
+                <div className="text-center relative w-full h-full">
+                  <Image
+                    src="/img.png"
+                    alt="Logo B1P"
+                    fill
+                    className="object-contain"
+                    priority
+                  />
                 </div>
               </div>
             </div>
@@ -111,9 +117,9 @@ export default function LoginPage() {
                   type="submit"
                   value={loading ? "Autenticando..." : "Iniciar Sesión"}
                   disabled={loading}
-                  className="w-full bg-[#6A3EF0] text-white py-4 rounded-xl font-bold hover:bg-[#1BB5B2] transition-all duration-500 shadow-lg hover:shadow-2xl hover:shadow-[#6A3EF0]/30 transform hover:-translate-y-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition-all duration-500 shadow-lg hover:shadow-2xl hover:shadow-blue-600/30 transform hover:-translate-y-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 />
-              </form>              
+              </form>
             </div>
           </div>
         </div>

@@ -20,7 +20,6 @@ export interface Anticipo {
   };
 }
 
-// Para el formato bancario
 export interface FormatoPABRow {
   NIT_PAGADOR: string;
   TIPO_DE_PAGO: string;
